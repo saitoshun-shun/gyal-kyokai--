@@ -249,55 +249,64 @@ cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
 pl_rows = [
     # ── 売上 ──
-    ("【売上高】", None, "sec"),
-    ("  ① TikTokメディアタイアップ",          tk_tie,    "normal"),
-    ("  ② IGメディアタイアップ",               ig_tie,    "normal"),
-    ("  タイアップ売上合計",                   tie_total, "sub"),
-    ("  ③ TikTok Shop / WESELL EC売上",       ec_gross,  "normal"),
-    ("売上合計",                               rev_total, "total_rev"),
-    ("", None, "blank"),
+    # (ラベル, データ, style, 合計方法, 書式)
+    # 合計方法: "sum" / "avg_nz" / None
+    ("【売上高】",                             None,     "sec",       None,      "#,##0"),
+    ("  ① TikTokメディアタイアップ",          tk_tie,   "normal",    "sum",     "#,##0"),
+    ("     受注社数（社）",                    tk_cases, "kpi_sub",   "sum",     "#,##0"),
+    ("     平均単価（万円/社）",               tk_atp,   "kpi_sub",   "avg_nz",  "#,##0"),
+    ("  ② IGメディアタイアップ",              ig_tie,   "normal",    "sum",     "#,##0"),
+    ("     受注社数（社）",                    ig_cases, "kpi_sub",   "sum",     "#,##0"),
+    ("     平均単価（万円/社）",               ig_atp,   "kpi_sub",   "avg_nz",  "#,##0"),
+    ("  タイアップ売上合計",                   tie_total,"sub",       "sum",     "#,##0"),
+    ("  ③ TikTok Shop / WESELL EC売上",       ec_gross, "normal",    "sum",     "#,##0"),
+    ("     注文件数（件）",                    ec_units, "kpi_sub",   "sum",     "#,##0"),
+    ("     平均注文単価（円）",                ec_atp,   "kpi_sub",   "avg_nz",  "#,##0"),
+    ("売上合計",                               rev_total,"total_rev", "sum",     "#,##0"),
+    ("", None, "blank", None, None),
 
     # ── タイアップ原価 ──
-    ("【タイアップ原価】※ほぼライセンス料のみ",None, "sec"),
-    ("  ギャル協会ライセンス料（タイアップ×20%）",tie_license,"normal"),
-    ("  コンテンツ制作費（タイアップ×10%）",   tie_prod,  "normal"),
-    ("  タイアップ原価合計",                   tie_cogs,  "sub"),
-    ("  タイアップ粗利",                       tie_gross, "tie_gross"),
-    ("  タイアップ粗利率",                     tie_gp_rate,"rate"),
-    ("", None, "blank"),
+    ("【タイアップ原価】※ほぼライセンス料のみ", None,        "sec",       None,     "#,##0"),
+    ("  ギャル協会ライセンス料（タイアップ×20%）", tie_license, "normal",  "sum",    "#,##0"),
+    ("  コンテンツ制作費（タイアップ×10%）",    tie_prod,    "normal",    "sum",    "#,##0"),
+    ("  タイアップ原価合計",                    tie_cogs,    "sub",       "sum",    "#,##0"),
+    ("  タイアップ粗利",                        tie_gross,   "tie_gross", "sum",    "#,##0"),
+    ("  タイアップ粗利率",                      tie_gp_rate, "rate",      "avg_nz", None),
+    ("", None, "blank", None, None),
 
     # ── EC原価 ──
-    ("【TikTok Shop EC原価】",                 None,         "sec"),
-    ("  商品仕入れ原価（EC売上×45%）",         ec_cogs_item, "normal"),
-    ("  TikTok Shop手数料（EC売上×6%）",       ec_fee,       "normal"),
-    ("  ギャル協会RS・物販（EC売上×15%）",     ec_gal_rs,    "normal"),
-    ("  EC原価合計",                           ec_cogs,      "sub"),
-    ("  TikTok Shop 粗利",                     ec_gross_pft, "ec_gross"),
-    ("  TikTok Shop 粗利率",                   ec_gp_rate,   "rate"),
-    ("", None, "blank"),
+    ("【TikTok Shop EC原価】",                  None,         "sec",       None,    "#,##0"),
+    ("  商品仕入れ原価（EC売上×45%）",          ec_cogs_item, "normal",    "sum",   "#,##0"),
+    ("  TikTok Shop手数料（EC売上×6%）",        ec_fee,       "normal",    "sum",   "#,##0"),
+    ("  ギャル協会RS・物販（EC売上×15%）",      ec_gal_rs,    "normal",    "sum",   "#,##0"),
+    ("  EC原価合計",                            ec_cogs,      "sub",       "sum",   "#,##0"),
+    ("  TikTok Shop 粗利",                      ec_gross_pft, "ec_gross",  "sum",   "#,##0"),
+    ("  TikTok Shop 粗利率",                    ec_gp_rate,   "rate",      "avg_nz",None),
+    ("", None, "blank", None, None),
 
     # ── 合算 ──
-    ("売上原価合計",                           cogs_total,  "total_cost"),
-    ("粗利益合計",                             gross_total, "gross"),
-    ("粗利率（合計）",                         gp_rate,     "rate"),
-    ("", None, "blank"),
+    ("売上原価合計",                            cogs_total,  "total_cost","sum",    "#,##0"),
+    ("粗利益合計",                              gross_total, "gross",     "sum",    "#,##0"),
+    ("粗利率（合計）",                          gp_rate,     "rate",      "avg_nz", None),
+    ("", None, "blank", None, None),
 
     # ── 販管費 ──
-    ("【販売管理費】",                         None,    "sec"),
-    ("  広告費（TK/IG広告運用）",              ad_exp,  "normal"),
-    ("  人件費（バズ社員 ／ ENTIALはゼロ）",   labor,   "normal"),
-    ("  その他販管費",                         other,   "normal"),
-    ("販売管理費合計",                         sga,     "total_cost"),
-    ("", None, "blank"),
+    ("【販売管理費】",                          None,    "sec",       None,  "#,##0"),
+    ("  広告費（TK/IG広告運用）",               ad_exp,  "normal",    "sum", "#,##0"),
+    ("  人件費（バズ社員 ／ ENTIALはゼロ）",    labor,   "normal",    "sum", "#,##0"),
+    ("  その他販管費",                          other,   "normal",    "sum", "#,##0"),
+    ("販売管理費合計",                          sga,     "total_cost","sum", "#,##0"),
+    ("", None, "blank", None, None),
 
     # ── 利益 ──
-    ("営業利益",                               op_profit, "op"),
-    ("営業利益率",                             op_rate,   "rate"),
+    ("営業利益",                                op_profit, "op",   "sum",    "#,##0"),
+    ("営業利益率",                              op_rate,   "rate", "avg_nz", None),
 ]
 
 STYLE = {
     "sec":       dict(bold=True,  sz=9,  fg="1A1A2E", bg=MID_GRY,  ha="left"),
     "normal":    dict(bold=False, sz=9,  fg="333333", bg=WHITE,     ha="left"),
+    "kpi_sub":   dict(bold=False, sz=8,  fg="888888", bg="FAFAFA",  ha="left"),
     "sub":       dict(bold=True,  sz=9,  fg="1A3A6B", bg=LT_BLUE,   ha="left"),
     "total_rev": dict(bold=True,  sz=10, fg="1A3A6B", bg=LT_BLUE,   ha="left"),
     "total_cost":dict(bold=True,  sz=9,  fg="555555", bg=LT_GRY,    ha="left"),
@@ -309,9 +318,11 @@ STYLE = {
     "blank":     dict(bold=False, sz=6,  fg=WHITE,     bg=WHITE,    ha="left"),
 }
 
-for pi, (label, vals, style) in enumerate(pl_rows):
+for pi, (label, vals, style, agg_method, num_fmt) in enumerate(pl_rows):
     ROW += 1
-    ws.row_dimensions[ROW].height = 6 if style == "blank" else 18
+    ws.row_dimensions[ROW].height = (6 if style == "blank"
+                                     else 15 if style == "kpi_sub"
+                                     else 18)
     st = STYLE[style]
 
     cell = ws.cell(row=ROW, column=NCOL_ITEM, value=label)
@@ -323,9 +334,16 @@ for pi, (label, vals, style) in enumerate(pl_rows):
         fill_empty(ROW, NCOL_M1, NCOL_TOTAL, st["bg"])
         continue
 
+    # データ書式の決定
+    is_rate = (style == "rate")
+    is_kpi  = (style == "kpi_sub")
+    cell_fmt = ('0.0"%"' if is_rate else (num_fmt or "#,##0"))
+
     for j, v in enumerate(vals):
         col = NCOL_M1 + j
-        cell2 = ws.cell(row=ROW, column=col, value=v)
+        # ゼロは "-" 表示（kpi_subと rate以外でもゼロは "-"）
+        disp_val = "-" if (v == 0 and style in ("kpi_sub",)) else v
+        cell2 = ws.cell(row=ROW, column=col, value=disp_val)
 
         # BEP月の強調（営業利益行のみ）
         if style == "op" and j == bep_month:
@@ -340,21 +358,20 @@ for pi, (label, vals, style) in enumerate(pl_rows):
             cell2.font = Font(name="Meiryo UI", bold=st["bold"], size=st["sz"], color=fg_v)
 
         cell2.alignment = Alignment(horizontal="center", vertical="center")
-        if style == "rate":
-            cell2.number_format = '0.0"%"'
-        else:
-            cell2.number_format = "#,##0"
+        if disp_val != "-":
+            cell2.number_format = cell_fmt
 
-    # 合計列
-    if style == "rate":
-        non_z2 = [v for v in vals if v != 0]
-        agg_v = round(sum(non_z2)/len(non_z2), 1) if non_z2 else 0.0
-        fmt2 = '0.0"%"'
+    # ── 合計列 ──
+    non_z2 = [v for v in vals if v != 0]
+    if agg_method == "avg_nz":
+        agg_v  = round(sum(non_z2)/len(non_z2), 1) if non_z2 else 0.0
+        fmt2   = '0.0"%"' if is_rate else (num_fmt or "#,##0")
     else:
         agg_v = sum(vals)
-        fmt2 = "#,##0"
+        fmt2  = '0.0"%"' if is_rate else (num_fmt or "#,##0")
 
-    cell3 = ws.cell(row=ROW, column=NCOL_TOTAL, value=agg_v)
+    disp_agg = "-" if (agg_v == 0 and style == "kpi_sub") else agg_v
+    cell3 = ws.cell(row=ROW, column=NCOL_TOTAL, value=disp_agg)
     fg3 = (WHITE if style == "op" else
            ("145A32" if (style in ("gross","ec_gross","tie_gross") and agg_v >= 0)
             else RED_ACC if (style in ("gross","ec_gross","tie_gross") and agg_v < 0)
@@ -365,7 +382,8 @@ for pi, (label, vals, style) in enumerate(pl_rows):
     cell3.font = Font(name="Meiryo UI", bold=True, size=st["sz"], color=fg3)
     cell3.fill = PatternFill("solid", fgColor=bg3)
     cell3.alignment = Alignment(horizontal="center", vertical="center")
-    cell3.number_format = fmt2
+    if disp_agg != "-":
+        cell3.number_format = fmt2
 
 # ─────────────────────────────────────────────────
 # BEP注記
