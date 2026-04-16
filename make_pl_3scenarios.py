@@ -37,7 +37,7 @@ SUCCESS = {
     "key": "success",
     "sheet": "①大成功",
     "title": "❶ 大成功パターン",
-    "subtitle": "Year1で売上1.5億・営業利益3,100万・M6損益分岐",
+    "subtitle": "Year1で売上1.5億・営業利益2,744万・M6損益分岐",
     "header_color": NAVY,
     "tk_cases": [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5],
     "ig_cases": [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4],
@@ -59,7 +59,7 @@ OK_PLAN = {
     "key": "ok",
     "sheet": "②及第点",
     "title": "❷ 及第点パターン",
-    "subtitle": "Year1で売上9,100万・営業利益1,200万・M7損益分岐",
+    "subtitle": "Year1で売上8,951万・営業利益872万・M7損益分岐",
     "header_color": ORG_ACC,
     "tk_cases": [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3],
     "ig_cases": [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3],
@@ -79,7 +79,7 @@ RETREAT = {
     "key": "retreat",
     "sheet": "③撤退",
     "title": "❸ 撤退パターン",
-    "subtitle": "Year1で売上1,170万・営業損失2,200万・M9末で撤退決定",
+    "subtitle": "Year1で売上1,171万・営業損失2,373万・M9末で撤退決定",
     "header_color": RED_ACC,
     "tk_cases": [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
     "ig_cases": [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
@@ -106,7 +106,9 @@ def compute(sc):
     ec_gross = [round(u * a / 10000) for u, a in zip(sc["ec_units"], sc["ec_atp"])]
     rev_total = [t + e for t, e in zip(tie_total, ec_gross)]
 
-    tie_license = [round(t * 0.20) for t in tie_total]
+    # ギャル協会出演・監修料: 件数×25万（月最低保証10万）
+    gal_cases   = [tk + ig for tk, ig in zip(sc["tk_cases"], sc["ig_cases"])]
+    tie_license = [max(c * 25, 10) for c in gal_cases]
     tie_prod    = [round(t * 0.10) for t in tie_total]
     tie_cogs    = [l + p for l, p in zip(tie_license, tie_prod)]
     tie_gross   = [t - cg for t, cg in zip(tie_total, tie_cogs)]
@@ -120,7 +122,12 @@ def compute(sc):
     cogs_total  = [t + e for t, e in zip(tie_cogs, ec_cogs)]
     gross_total = [r - c for r, c in zip(rev_total, cogs_total)]
 
-    sga = [a + l + o for a, l, o in zip(sc["ad_exp"], sc["labor"], sc["other"])]
+    # ENTIAL業務委託費（完全成功報酬: TIE×5% + EC×3%）
+    ential_fee = [round(t * 0.05) + round(e * 0.03)
+                  for t, e in zip(tie_total, ec_gross)]
+
+    sga = [a + l + o + en
+           for a, l, o, en in zip(sc["ad_exp"], sc["labor"], sc["other"], ential_fee)]
     op_profit = [g - s for g, s in zip(gross_total, sga)]
     bep_month = next((i for i, v in enumerate(op_profit) if v > 0), None)
 
@@ -134,11 +141,13 @@ def compute(sc):
         tk_atp=[sc["tk_atp_unit"] if c>0 else 0 for c in sc["tk_cases"]],
         ig_atp=[sc["ig_atp_unit"] if c>0 else 0 for c in sc["ig_cases"]],
         ec_gross=ec_gross, rev_total=rev_total,
+        gal_cases=gal_cases,
         tie_license=tie_license, tie_prod=tie_prod, tie_cogs=tie_cogs,
         tie_gross=tie_gross, tie_gp_r=tie_gp_r,
         ec_cogs_item=ec_cogs_item, ec_fee=ec_fee, ec_gal_rs=ec_gal_rs,
         ec_cogs=ec_cogs, ec_gross_pft=ec_gross_pft, ec_gp_r=ec_gp_r,
         cogs_total=cogs_total, gross_total=gross_total, gp_rate=gp_rate,
+        ential_fee=ential_fee,
         sga=sga, op_profit=op_profit, op_rate=op_rate, bep_month=bep_month,
     )
 
@@ -287,8 +296,9 @@ def build_pl_sheet(ws, sc):
         ("     平均注文単価(円)",                  sc["ec_atp"],       "kpi_sub",   "avg_nz", "#,##0"),
         ("売上合計",                               c_data["rev_total"],"total_rev", "sum",    "#,##0"),
         ("", None, "blank", None, None),
-        ("【タイアップ原価】※ほぼライセンス料のみ", None,              "sec",       None,     "#,##0"),
-        ("  ギャル協会ライセンス料（×20%）",       c_data["tie_license"],"normal",  "sum",    "#,##0"),
+        ("【タイアップ原価】",                        None,              "sec",       None,     "#,##0"),
+        ("  ギャル協会出演・監修料（件数×25万・最低保証10万）", c_data["tie_license"],"normal","sum","#,##0"),
+        ("     タイアップ件数（社）",               c_data["gal_cases"],"kpi_sub",  "sum",    "#,##0"),
         ("  コンテンツ制作費（×10%）",             c_data["tie_prod"], "normal",    "sum",    "#,##0"),
         ("  タイアップ原価合計",                   c_data["tie_cogs"], "sub",       "sum",    "#,##0"),
         ("  タイアップ粗利",                       c_data["tie_gross"],"tie_gross", "sum",    "#,##0"),
@@ -310,6 +320,7 @@ def build_pl_sheet(ws, sc):
         ("  広告費（TK/IG広告運用）",              sc["ad_exp"],"normal", "sum", "#,##0"),
         ("  人件費（バズ社員）",                   sc["labor"], "normal", "sum", "#,##0"),
         ("  その他販管費",                         sc["other"], "normal", "sum", "#,##0"),
+        ("  ENTIAL業務委託費（TIE×5%＋EC×3%）",  c_data["ential_fee"],"normal","sum","#,##0"),
         ("販売管理費合計",                         c_data["sga"],"total_cost","sum","#,##0"),
         ("", None, "blank", None, None),
         ("営業利益",                               c_data["op_profit"], "op",   "sum",    "#,##0"),
@@ -397,8 +408,9 @@ def build_pl_sheet(ws, sc):
     ws.row_dimensions[ROW].height = 14
     ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
     fcell = ws.cell(row=ROW, column=1,
-        value="【注記】単位：万円 ／ タイアップ原価率30%（ライセンス料20%＋制作費10%）／ "
-              "EC原価率66%（仕入45%＋TK手数料6%＋ギャル協会RS15%）／ ENTIAL費用はバズPLに計上なし")
+        value="【注記】単位：万円 ／ ギャル協会：出演・監修料=件数×25万（月最低保証10万）＋EC RS 15% ／ "
+              "制作費：TIE売上×10% ／ EC原価率66%（仕入45%＋TK手数料6%＋ギャル協会RS15%）／ "
+              "ENTIAL：完全成功報酬（TIE×5%＋EC×3%、固定費ゼロ）")
     fcell.font = Font(name="Meiryo UI", size=8, color=GRY_TXT, italic=True)
     fcell.fill = PatternFill("solid", fgColor=LT_GRY)
     fcell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -466,6 +478,7 @@ def build_comparison_sheet(ws):
         ("粗利合計（万円）",      [sum(sc["c"]["gross_total"]) for sc in SCENARIOS], "#,##0"),
         ("粗利率",                [round(sum(sc["c"]["gross_total"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
         ("販管費合計（万円）",    [sum(sc["c"]["sga"]) for sc in SCENARIOS],         "#,##0"),
+        ("  ├ うちENTIAL成功報酬",[sum(sc["c"]["ential_fee"]) for sc in SCENARIOS],  "#,##0"),
         ("営業利益（万円）",      [sum(sc["c"]["op_profit"]) for sc in SCENARIOS],   "#,##0"),
         ("営業利益率",            [round(sum(sc["c"]["op_profit"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
         ("損益分岐点",            [f"M{sc['c']['bep_month']+1}" if sc['c']['bep_month'] is not None else "達成せず" for sc in SCENARIOS], None),
@@ -492,6 +505,56 @@ def build_comparison_sheet(ws):
                 fg_c = GREEN if v != "達成せず" else RED_ACC
             set_cell(ws, ROW, col, v, bold=is_highlight, sz=10,
                      fg=fg_c, bg=bg, fmt=fmt if isinstance(v, (int, float)) else None)
+
+    # ─── 各社受取シミュレーション ───
+    ROW += 2
+    ws.row_dimensions[ROW].height = 24
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
+    cell = ws.cell(row=ROW, column=1, value="▌ 各社Year1受取シミュレーション（単位：万円）")
+    cell.font = Font(name="Meiryo UI", bold=True, size=12, color=WHITE)
+    cell.fill = PatternFill("solid", fgColor="4A235A")
+    cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    ROW += 1
+    ws.row_dimensions[ROW].height = 22
+    for i, h in enumerate(["受取者・項目", "①大成功", "②及第点", "③撤退"]):
+        color = ["4A235A", NAVY, ORG_ACC, RED_ACC][i]
+        set_cell(ws, ROW, 1+i, h, bold=True, sz=10, fg=WHITE, bg=color,
+                 ha="center" if i > 0 else "left", indent=1 if i == 0 else 0)
+
+    payout_rows = [
+        ("【ギャル協会 受取合計】",
+         [sum(sc["c"]["tie_license"]) + sum(sc["c"]["ec_gal_rs"]) for sc in SCENARIOS],
+         "#,##0", True),
+        ("  ├ 出演・監修料（件数×25万）",
+         [sum(sc["c"]["tie_license"]) for sc in SCENARIOS], "#,##0", False),
+        ("  └ EC レベニューシェア（×15%）",
+         [sum(sc["c"]["ec_gal_rs"]) for sc in SCENARIOS], "#,##0", False),
+        ("【ENTIAL 受取合計】（成功報酬）",
+         [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", True),
+        ("  ├ TIEタイアップ成功報酬（×5%）",
+         [sum(round(t * 0.05) for t in sc["c"]["tie_total"]) for sc in SCENARIOS],
+         "#,##0", False),
+        ("  └ EC成功報酬（×3%）",
+         [sum(round(e * 0.03) for e in sc["c"]["ec_gross"]) for sc in SCENARIOS],
+         "#,##0", False),
+        ("【バズ 営業利益（手残り）】",
+         [sum(sc["c"]["op_profit"]) for sc in SCENARIOS], "#,##0", True),
+    ]
+    for pi, (label, vals, fmt, bold) in enumerate(payout_rows):
+        ROW += 1
+        ws.row_dimensions[ROW].height = 22
+        bg = LT_PUR if bold else (LT_GRY if pi % 2 == 0 else WHITE)
+        set_cell(ws, ROW, 1, label, bold=bold, sz=10,
+                 fg="4A235A" if bold else "333333", bg=bg, ha="left", indent=1)
+        for i, v in enumerate(vals):
+            col = 2 + i
+            fg_c = "333333"
+            if label == "【バズ 営業利益（手残り）】":
+                fg_c = GREEN if v >= 0 else RED_ACC
+            set_cell(ws, ROW, col, v, bold=bold, sz=10,
+                     fg=fg_c, bg=bg, fmt=fmt)
+        set_cell(ws, ROW, 5, "", bg=bg)
 
     # ─── 撤退判断のKPIゲート ───
     ROW += 2
