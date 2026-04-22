@@ -643,21 +643,200 @@ def build_comparison_sheet(ws):
 # 単価内訳シート（1件あたり収支：TKタイ / IGタイ / TikTok Shop）
 # ═══════════════════════════════════════════════════════
 def build_unit_economics_sheet(ws):
-    """1件売れたときにお金がどう流れるかをプラン別に整理"""
+    """1件売れたときにお金がどう流れるか（①大成功パターンの単価で表示）"""
 
-    def avg_ec_yen(sc):
-        total_units = sum(sc["ec_units"])
-        if total_units == 0:
-            return 0
-        return round(sum(sc["c"]["ec_gross"]) * 10000 / total_units, -2)
+    sc = SUCCESS  # 単価150万・EC標準単価を基準に表示
+    total_units = sum(sc["ec_units"])
+    ec_price = round(sum(sc["c"]["ec_gross"]) * 10000 / total_units, -2) if total_units else 0
+    atp = sc["tk_atp_unit"]  # 150万
 
-    ec_prices = [avg_ec_yen(sc) for sc in SCENARIOS]
+    ws.column_dimensions["A"].width = 38
+    ws.column_dimensions["B"].width = 18
+    ws.column_dimensions["C"].width = 28
 
-    ws.column_dimensions["A"].width = 36
-    ws.column_dimensions["B"].width = 20
-    ws.column_dimensions["C"].width = 20
-    ws.column_dimensions["D"].width = 20
-    ws.column_dimensions["E"].width = 26
+    ROW = 1
+    ws.row_dimensions[ROW].height = 38
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=3)
+    cell = ws.cell(row=ROW, column=1,
+                   value="1件あたり 収支内訳　｜　TKタイアップ / IGタイアップ / TikTok Shop")
+    cell.font = Font(name="Meiryo UI", bold=True, size=15, color=WHITE)
+    cell.fill = PatternFill("solid", fgColor=NAVY)
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ROW += 1
+    ws.row_dimensions[ROW].height = 16
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=3)
+    cell = ws.cell(row=ROW, column=1,
+                   value=f"タイアップ単価{atp}万円・EC平均単価{int(ec_price):,}円のケース　｜　タイアップ単位：万円　EC単位：円")
+    cell.font = Font(name="Meiryo UI", size=9, color="CCCCCC")
+    cell.fill = PatternFill("solid", fgColor=NAVY2)
+    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    thin = Side(style="thin", color="DDDDDD")
+
+    def sec_hdr(row, label, color=BLUE):
+        ws.row_dimensions[row].height = 26
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+        c = ws.cell(row=row, column=1, value=label)
+        c.font = Font(name="Meiryo UI", bold=True, size=12, color=WHITE)
+        c.fill = PatternFill("solid", fgColor=color)
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    def sub_hdr(row, label, color=LT_BLUE, fg=NAVY):
+        ws.row_dimensions[row].height = 16
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
+        c = ws.cell(row=row, column=1, value=label)
+        c.font = Font(name="Meiryo UI", bold=True, size=9, color=fg)
+        c.fill = PatternFill("solid", fgColor=color)
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    def row_data(row, label, val, note="", is_minus=False, is_result=False,
+                 bg=None, bold=False, fg_label=None, fmt="#,##0"):
+        ws.row_dimensions[row].height = 20
+        bg_use = bg or (LT_BLUE if is_result else WHITE)
+        fg_l = fg_label or ("1A3A6B" if is_result else "333333")
+        set_cell(ws, row, 1, label, bold=bold or is_result, sz=10,
+                 fg=fg_l, bg=bg_use, ha="left", indent=1)
+        if val is None:
+            set_cell(ws, row, 2, "─", sz=10, fg=GRY_TXT, bg=bg_use)
+        else:
+            fg_v = (GREEN if is_result and val >= 0
+                    else RED_ACC if (is_result and val < 0) or is_minus
+                    else "333333")
+            bg_v = (LT_GRN if is_result and val >= 0
+                    else LT_RED if (is_result and val < 0) or is_minus
+                    else bg_use)
+            c2 = ws.cell(row=row, column=2, value=val)
+            c2.font = Font(name="Meiryo UI", bold=bold or is_result, size=11, color=fg_v)
+            c2.fill = PatternFill("solid", fgColor=bg_v)
+            c2.alignment = Alignment(horizontal="center", vertical="center")
+            c2.number_format = fmt
+        set_cell(ws, row, 3, note, sz=9, fg=GRY_TXT, bg=bg_use, ha="left", indent=1)
+
+    def row_rate(row, label, pct, note=""):
+        ws.row_dimensions[row].height = 16
+        set_cell(ws, row, 1, label, sz=9, fg=GRY_TXT, bg=LT_GRY, ha="left", indent=2)
+        set_cell(ws, row, 2, pct, sz=9, fg=GRY_TXT, bg=LT_GRY, fmt='0.0"%"')
+        set_cell(ws, row, 3, note, sz=9, fg=GRY_TXT, bg=LT_GRY, ha="left", indent=1)
+
+    def blank(row):
+        ws.row_dimensions[row].height = 8
+        for col in range(1, 4):
+            ws.cell(row=row, column=col).fill = PatternFill("solid", fgColor=WHITE)
+
+    # ── ① TikTokタイアップ ────────────────────────────────
+    ROW += 2
+    sec_hdr(ROW, "① TikTokタイアップ　1件あたり収支（単位：万円）")
+    ROW += 1
+    row_data(ROW, "受注単価（バズ売上）", atp, note="バズが企業から受け取る金額")
+    ROW += 1
+    row_data(ROW, "  → ギャル協会 出演・監修料", 25, note="件数×25万（固定）", is_minus=True)
+    ROW += 1
+    row_data(ROW, "  → コンテンツ制作費（売上×10%）", round(atp * 0.10),
+             note="編集・字幕・投稿コスト", is_minus=True)
+    ROW += 1
+    tk_cogs = 25 + round(atp * 0.10)
+    row_data(ROW, "タイアップ原価合計", tk_cogs,
+             note="バズが払う原価の合計", bg=LT_GRY, bold=True, fg_label="555555")
+    ROW += 1
+    tk_gp = atp - tk_cogs
+    row_data(ROW, "バズ 粗利（原価控除後）", tk_gp,
+             note="ここからさらに販管費を引く", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  粗利率", round(tk_gp / atp * 100, 1))
+    ROW += 1
+    tk_ential = round(atp * 0.05)
+    row_data(ROW, "  → ENTIAL 成功報酬（売上×5%）", tk_ential,
+             note="販管費の中の変動費", is_minus=True)
+    ROW += 1
+    tk_net = tk_gp - tk_ential
+    row_data(ROW, "バズ 実質手残り（粗利 − ENTIAL）", tk_net,
+             note="広告費・人件費は別途固定で発生", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  実質手残り率", round(tk_net / atp * 100, 1),
+             note="※広告費・人件費は月固定のため件数で変動")
+
+    # ── ② IGタイアップ ────────────────────────────────────
+    ROW += 2
+    blank(ROW)
+    ROW += 1
+    sec_hdr(ROW, "② IGタイアップ　1件あたり収支（単位：万円）")
+    ROW += 1
+    ig_atp = sc["ig_atp_unit"]
+    row_data(ROW, "受注単価（バズ売上）", ig_atp, note="バズが企業から受け取る金額")
+    ROW += 1
+    row_data(ROW, "  → ギャル協会 出演・監修料", 25, note="件数×25万（固定）", is_minus=True)
+    ROW += 1
+    row_data(ROW, "  → コンテンツ制作費（売上×10%）", round(ig_atp * 0.10),
+             note="編集・字幕・投稿コスト", is_minus=True)
+    ROW += 1
+    ig_cogs = 25 + round(ig_atp * 0.10)
+    row_data(ROW, "タイアップ原価合計", ig_cogs,
+             note="バズが払う原価の合計", bg=LT_GRY, bold=True, fg_label="555555")
+    ROW += 1
+    ig_gp = ig_atp - ig_cogs
+    row_data(ROW, "バズ 粗利（原価控除後）", ig_gp,
+             note="ここからさらに販管費を引く", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  粗利率", round(ig_gp / ig_atp * 100, 1))
+    ROW += 1
+    ig_ential = round(ig_atp * 0.05)
+    row_data(ROW, "  → ENTIAL 成功報酬（売上×5%）", ig_ential,
+             note="販管費の中の変動費", is_minus=True)
+    ROW += 1
+    ig_net = ig_gp - ig_ential
+    row_data(ROW, "バズ 実質手残り（粗利 − ENTIAL）", ig_net,
+             note="広告費・人件費は別途固定で発生", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  実質手残り率", round(ig_net / ig_atp * 100, 1))
+
+    # ── ③ TikTok Shop 1注文 ───────────────────────────────
+    ROW += 2
+    blank(ROW)
+    ROW += 1
+    sec_hdr(ROW, f"③ TikTok Shop　1注文あたり収支（単位：円　／　平均単価{int(ec_price):,}円）")
+
+    ROW += 1
+    row_data(ROW, "注文単価（ギャル協会 EC売上）", int(ec_price),
+             note="①大成功シナリオの年間加重平均", fmt="#,##0")
+
+    ROW += 1
+    sub_hdr(ROW, "  ▸ バズの収益（アフィリエイトコミッション）", color=LT_BLUE, fg=NAVY)
+    ROW += 1
+    ec_comm = round(ec_price * 0.20)
+    row_data(ROW, "  バズ受取（×20% コミッション）", int(ec_comm),
+             note="バズの原価ゼロ・丸々粗利", fmt="#,##0", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  バズ粗利率", 100.0, note="EC原価はバズに発生しない")
+
+    ROW += 1
+    sub_hdr(ROW, "  ▸ ギャル協会側の内訳（参考）", color=LT_GRN2, fg="145A32")
+    ROW += 1
+    ec_cogs = round(ec_price * 0.45)
+    row_data(ROW, "  仕入原価（×45%）", int(ec_cogs), note="OEM製造コスト", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_fee = round(ec_price * 0.07)
+    row_data(ROW, "  TikTok Shop 手数料（×7%）", int(ec_fee),
+             note="プラットフォーム手数料（ギャル協会が払う）", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_logi = round(ec_price * 0.04)
+    row_data(ROW, "  物流費（×4%）", int(ec_logi), note="発送・梱包コスト", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_loss = round(ec_price * 0.01)
+    row_data(ROW, "  在庫損失（×1%）", int(ec_loss), note="廃棄・返品ロス", fmt="#,##0", is_minus=True)
+    ROW += 1
+    row_data(ROW, "  バズへのコミッション支払い（×20%）", int(ec_comm),
+             note="バズへの支払い", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_gal = int(ec_price) - ec_cogs - ec_fee - ec_logi - ec_loss - ec_comm
+    row_data(ROW, "  ギャル協会 手残り（×23%相当）", ec_gal,
+             note="商品単価が上がるほど増える", fmt="#,##0", is_result=True)
+    ROW += 1
+    row_rate(ROW, "  ギャル協会 手残り率", round(ec_gal / ec_price * 100, 1))
+
+    for row in ws.iter_rows(min_row=1, max_row=ROW, min_col=1, max_col=3):
+        for cell in row:
+            cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
 
     ROW = 1
     ws.row_dimensions[ROW].height = 38
@@ -834,103 +1013,6 @@ def build_unit_economics_sheet(ws):
     rate_row(ROW, "  実質手残り率",
              [round(n / sc["ig_atp_unit"] * 100, 1) for n, sc in zip(ig_net, SCENARIOS)])
 
-    # ── セクション 3: TikTok Shop 1注文 ─────────────────
-    ROW += 2
-    blank_row(ROW)
-    ROW += 1
-    hdr(ROW, "③ TikTok Shop　1注文あたり収支　（単位：円）")
-
-    ROW += 1
-    col_hdr(ROW, [f"①大成功（平均{int(ec_prices[0]):,}円）",
-                  f"②及第点（平均{int(ec_prices[1]):,}円）",
-                  f"③撤退（平均{int(ec_prices[2]):,}円）"])
-
-    ROW += 1
-    data_row(ROW, "平均注文単価（ギャル協会 EC売上）",
-             [int(p) for p in ec_prices],
-             note="シナリオ別の年間加重平均", fmt="#,##0")
-
-    ROW += 1
-    ws.row_dimensions[ROW].height = 14
-    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
-    c = ws.cell(row=ROW, column=1, value="  ▸ バズの収益（アフィリエイトコミッション）")
-    c.font = Font(name="Meiryo UI", bold=True, size=9, color=NAVY)
-    c.fill = PatternFill("solid", fgColor=LT_BLUE)
-    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
-    ROW += 1
-    ec_comm = [round(p * 0.20) for p in ec_prices]
-    data_row(ROW, "  バズ受取（×20% コミッション）",
-             [int(v) for v in ec_comm],
-             note="バズの原価ゼロ・丸々粗利", fmt="#,##0", is_result=True)
-    ROW += 1
-    rate_row(ROW, "  バズ粗利率", [100.0, 100.0, 100.0],
-             note="EC原価はバズに発生しない")
-
-    ROW += 1
-    ws.row_dimensions[ROW].height = 14
-    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
-    c = ws.cell(row=ROW, column=1, value="  ▸ ギャル協会側の内訳（参考）")
-    c.font = Font(name="Meiryo UI", bold=True, size=9, color="145A32")
-    c.fill = PatternFill("solid", fgColor=LT_GRN2)
-    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
-
-    ROW += 1
-    ec_cogs = [round(p * 0.45) for p in ec_prices]
-    data_row(ROW, "  仕入原価（×45%）",
-             [int(v) for v in ec_cogs], note="OEM製造コスト", fmt="#,##0", is_minus=True)
-    ROW += 1
-    ec_fee = [round(p * 0.07) for p in ec_prices]
-    data_row(ROW, "  TikTok Shop 手数料（×7%）",
-             [int(v) for v in ec_fee], note="プラットフォーム手数料", fmt="#,##0", is_minus=True)
-    ROW += 1
-    ec_logi = [round(p * 0.04) for p in ec_prices]
-    data_row(ROW, "  物流費（×4%）",
-             [int(v) for v in ec_logi], note="発送・梱包コスト", fmt="#,##0", is_minus=True)
-    ROW += 1
-    ec_loss = [round(p * 0.01) for p in ec_prices]
-    data_row(ROW, "  在庫損失（×1%）",
-             [int(v) for v in ec_loss], note="廃棄・返品ロス", fmt="#,##0", is_minus=True)
-    ROW += 1
-    data_row(ROW, "  バズへのアフィリエイトコミッション（×20%）",
-             [int(v) for v in ec_comm], note="バズへの支払い", fmt="#,##0", is_minus=True)
-    ROW += 1
-    ec_gal = [int(p) - c - f - l - ls - cm
-              for p, c, f, l, ls, cm in
-              zip(ec_prices, ec_cogs, ec_fee, ec_logi, ec_loss, ec_comm)]
-    data_row(ROW, "  ギャル協会 手残り（×23%相当）",
-             ec_gal, note="商品単価が上がるほど増える", fmt="#,##0", is_result=True)
-    ROW += 1
-    rate_row(ROW, "  ギャル協会 手残り率",
-             [round(g / p * 100, 1) for g, p in zip(ec_gal, ec_prices)])
-
-    # 枠線
-    for row in ws.iter_rows(min_row=1, max_row=ROW, min_col=1, max_col=5):
-        for cell in row:
-            cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
-
-
-# ═══════════════════════════════════════════════════════
-# メイン実行
-# ═══════════════════════════════════════════════════════
-wb = openpyxl.Workbook()
-default_ws = wb.active
-
-# 比較シートを最初に
-ws_cmp = wb.create_sheet(title="比較・撤退基準", index=0)
-build_comparison_sheet(ws_cmp)
-
-# 単価内訳シート（1件あたり収支）
-ws_unit = wb.create_sheet(title="単価内訳")
-build_unit_economics_sheet(ws_unit)
-
-# 各シナリオのPLシートを生成
-for sc in SCENARIOS:
-    ws = wb.create_sheet(title=sc["sheet"])
-    build_pl_sheet(ws, sc)
-
-# デフォルトシート削除
-wb.remove(default_ws)
 
 
 # ═══════════════════════════════════════════════════════
