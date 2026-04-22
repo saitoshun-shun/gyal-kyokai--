@@ -37,7 +37,7 @@ SUCCESS = {
     "key": "success",
     "sheet": "①大成功",
     "title": "❶ 大成功パターン",
-    "subtitle": "Year1で売上1.5億・営業利益2,258万・M6損益分岐",
+    "subtitle": "Year1でバズ売上8,519万・営業利益1,854万・M6損益分岐",
     "header_color": NAVY,
     "tk_cases": [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5],
     "ig_cases": [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4],
@@ -59,7 +59,7 @@ OK_PLAN = {
     "key": "ok",
     "sheet": "②及第点",
     "title": "❷ 及第点パターン",
-    "subtitle": "Year1で売上8,951万・営業利益615万・M7損益分岐",
+    "subtitle": "Year1でバズ売上5,510万・営業利益397万・M7損益分岐",
     "header_color": ORG_ACC,
     "tk_cases": [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3],
     "ig_cases": [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3],
@@ -79,7 +79,7 @@ RETREAT = {
     "key": "retreat",
     "sheet": "③撤退",
     "title": "❸ 撤退パターン",
-    "subtitle": "Year1で売上1,171万・営業損失2,409万・M9末で撤退決定",
+    "subtitle": "Year1でバズ売上715万・営業損失2,435万・M9末で撤退決定",
     "header_color": RED_ACC,
     "tk_cases": [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
     "ig_cases": [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
@@ -103,8 +103,13 @@ def compute(sc):
     tk_tie = [c * sc["tk_atp_unit"] for c in sc["tk_cases"]]
     ig_tie = [c * sc["ig_atp_unit"] for c in sc["ig_cases"]]
     tie_total = [t + i for t, i in zip(tk_tie, ig_tie)]
-    ec_gross = [round(u * a / 10000) for u, a in zip(sc["ec_units"], sc["ec_atp"])]
-    rev_total = [t + e for t, e in zip(tie_total, ec_gross)]
+
+    # EC：ギャル協会がショップオーナー → バズはアフィリエイトコミッション（×20%）のみ
+    ec_gross      = [round(u * a / 10000) for u, a in zip(sc["ec_units"], sc["ec_atp"])]
+    ec_commission = [round(e * 0.20) for e in ec_gross]
+
+    # バズ売上 = タイアップ + ECアフィリエイトコミッション
+    rev_total = [t + ec for t, ec in zip(tie_total, ec_commission)]
 
     # ギャル協会出演・監修料: 件数×25万（月最低保証10万）
     gal_cases   = [tk + ig for tk, ig in zip(sc["tk_cases"], sc["ig_cases"])]
@@ -113,23 +118,12 @@ def compute(sc):
     tie_cogs    = [l + p for l, p in zip(tie_license, tie_prod)]
     tie_gross   = [t - cg for t, cg in zip(tie_total, tie_cogs)]
 
-    ec_cogs_item = [round(e * 0.45) for e in ec_gross]
-    # TikTok Shop手数料: 新規出店90日（M1〜3）は3%、M4以降は7%
-    ec_fee       = [round(e * (0.03 if i < 3 else 0.07)) for i, e in enumerate(ec_gross)]
-    ec_gal_rs    = [round(e * 0.15) for e in ec_gross]
-    ec_logistics = [round(e * 0.04) for e in ec_gross]   # 物流・梱包費
-    ec_inv_loss  = [round(e * 0.01) for e in ec_gross]   # 在庫損失引当
-    ec_cogs      = [ci + f + g + l + il
-                    for ci, f, g, l, il in zip(ec_cogs_item, ec_fee, ec_gal_rs,
-                                               ec_logistics, ec_inv_loss)]
-    ec_gross_pft = [e - c for e, c in zip(ec_gross, ec_cogs)]
-
-    cogs_total  = [t + e for t, e in zip(tie_cogs, ec_cogs)]
+    # EC原価はバズに発生しない（ギャル協会がショップオーナー）
+    cogs_total  = tie_cogs
     gross_total = [r - c for r, c in zip(rev_total, cogs_total)]
 
-    # ENTIAL業務委託費（完全成功報酬: TIE×5% + EC×3%）
-    ential_fee = [round(t * 0.05) + round(e * 0.03)
-                  for t, e in zip(tie_total, ec_gross)]
+    # ENTIAL成功報酬: TIEのみ×5%（EC運用から除外のため EC×3%削除）
+    ential_fee = [round(t * 0.05) for t in tie_total]
 
     sga = [a + l + o + en
            for a, l, o, en in zip(sc["ad_exp"], sc["labor"], sc["other"], ential_fee)]
@@ -138,20 +132,17 @@ def compute(sc):
 
     gp_rate  = [round(g/r*100,1) if r>0 else 0.0 for g,r in zip(gross_total, rev_total)]
     tie_gp_r = [round(tg/t*100,1) if t>0 else 0.0 for tg,t in zip(tie_gross, tie_total)]
-    ec_gp_r  = [round(eg/e*100,1) if e>0 else 0.0 for eg,e in zip(ec_gross_pft, ec_gross)]
     op_rate  = [round(o/r*100,1) if r>0 else 0.0 for o,r in zip(op_profit, rev_total)]
 
     return dict(
         tk_tie=tk_tie, ig_tie=ig_tie, tie_total=tie_total,
         tk_atp=[sc["tk_atp_unit"] if c>0 else 0 for c in sc["tk_cases"]],
         ig_atp=[sc["ig_atp_unit"] if c>0 else 0 for c in sc["ig_cases"]],
-        ec_gross=ec_gross, rev_total=rev_total,
+        ec_gross=ec_gross, ec_commission=ec_commission,
+        rev_total=rev_total,
         gal_cases=gal_cases,
         tie_license=tie_license, tie_prod=tie_prod, tie_cogs=tie_cogs,
         tie_gross=tie_gross, tie_gp_r=tie_gp_r,
-        ec_cogs_item=ec_cogs_item, ec_fee=ec_fee, ec_gal_rs=ec_gal_rs,
-        ec_logistics=ec_logistics, ec_inv_loss=ec_inv_loss,
-        ec_cogs=ec_cogs, ec_gross_pft=ec_gross_pft, ec_gp_r=ec_gp_r,
         cogs_total=cogs_total, gross_total=gross_total, gp_rate=gp_rate,
         ential_fee=ential_fee,
         sga=sga, op_profit=op_profit, op_rate=op_rate, bep_month=bep_month,
@@ -289,50 +280,43 @@ def build_pl_sheet(ws, sc):
 
     # PL行定義
     pl_rows = [
-        ("【売上高】",                             None,               "sec",       None,     "#,##0"),
-        ("  ① TikTokメディアタイアップ",          c_data["tk_tie"],   "normal",    "sum",    "#,##0"),
-        ("     受注社数（社）",                    sc["tk_cases"],     "kpi_sub",   "sum",    "#,##0"),
-        ("     平均単価（万円/社）",               c_data["tk_atp"],   "kpi_sub",   "avg_nz", "#,##0"),
-        ("  ② IGメディアタイアップ",              c_data["ig_tie"],   "normal",    "sum",    "#,##0"),
-        ("     受注社数（社）",                    sc["ig_cases"],     "kpi_sub",   "sum",    "#,##0"),
-        ("     平均単価（万円/社）",               c_data["ig_atp"],   "kpi_sub",   "avg_nz", "#,##0"),
-        ("  タイアップ売上合計",                   c_data["tie_total"],"sub",       "sum",    "#,##0"),
-        ("  ③ TikTok Shop / WESELL EC売上",       c_data["ec_gross"], "normal",    "sum",    "#,##0"),
-        ("     注文件数(件)",                      sc["ec_units"],     "kpi_sub",   "sum",    "#,##0"),
-        ("     平均注文単価(円)",                  sc["ec_atp"],       "kpi_sub",   "avg_nz", "#,##0"),
-        ("売上合計",                               c_data["rev_total"],"total_rev", "sum",    "#,##0"),
+        ("【売上高】",                                       None,                    "sec",     None,     "#,##0"),
+        ("  ① TikTokメディアタイアップ",                    c_data["tk_tie"],        "normal",  "sum",    "#,##0"),
+        ("     受注社数（社）",                              sc["tk_cases"],          "kpi_sub", "sum",    "#,##0"),
+        ("     平均単価（万円/社）",                         c_data["tk_atp"],        "kpi_sub", "avg_nz", "#,##0"),
+        ("  ② IGメディアタイアップ",                        c_data["ig_tie"],        "normal",  "sum",    "#,##0"),
+        ("     受注社数（社）",                              sc["ig_cases"],          "kpi_sub", "sum",    "#,##0"),
+        ("     平均単価（万円/社）",                         c_data["ig_atp"],        "kpi_sub", "avg_nz", "#,##0"),
+        ("  タイアップ売上合計",                             c_data["tie_total"],     "sub",     "sum",    "#,##0"),
+        ("  ③ ECアフィリエイトコミッション（×20%）",        c_data["ec_commission"], "normal",  "sum",    "#,##0"),
+        ("     EC実売上（ギャル協会側・参考値）",            c_data["ec_gross"],      "kpi_sub", "sum",    "#,##0"),
+        ("     注文件数（件）",                              sc["ec_units"],          "kpi_sub", "sum",    "#,##0"),
+        ("     平均注文単価（円）",                          sc["ec_atp"],            "kpi_sub", "avg_nz", "#,##0"),
+        ("売上合計",                                        c_data["rev_total"],     "total_rev","sum",   "#,##0"),
         ("", None, "blank", None, None),
-        ("【タイアップ原価】",                        None,              "sec",       None,     "#,##0"),
-        ("  ギャル協会出演・監修料（件数×25万・最低保証10万）", c_data["tie_license"],"normal","sum","#,##0"),
-        ("     タイアップ件数（社）",               c_data["gal_cases"],"kpi_sub",  "sum",    "#,##0"),
-        ("  コンテンツ制作費（×10%）",             c_data["tie_prod"], "normal",    "sum",    "#,##0"),
-        ("  タイアップ原価合計",                   c_data["tie_cogs"], "sub",       "sum",    "#,##0"),
-        ("  タイアップ粗利",                       c_data["tie_gross"],"tie_gross", "sum",    "#,##0"),
-        ("  タイアップ粗利率",                     c_data["tie_gp_r"], "rate",      "avg_nz", None),
+        ("【タイアップ原価】",                               None,                    "sec",     None,     "#,##0"),
+        ("  ギャル協会出演・監修料（件数×25万・最低保証10万）", c_data["tie_license"], "normal", "sum",   "#,##0"),
+        ("     タイアップ件数（社）",                        c_data["gal_cases"],     "kpi_sub", "sum",   "#,##0"),
+        ("  コンテンツ制作費（×10%）",                      c_data["tie_prod"],      "normal",  "sum",   "#,##0"),
+        ("  タイアップ原価合計",                             c_data["tie_cogs"],      "sub",     "sum",   "#,##0"),
+        ("  タイアップ粗利",                                 c_data["tie_gross"],     "tie_gross","sum",  "#,##0"),
+        ("  タイアップ粗利率",                               c_data["tie_gp_r"],      "rate",    "avg_nz", None),
         ("", None, "blank", None, None),
-        ("【TikTok Shop EC原価】",                     None,                    "sec",    None,     "#,##0"),
-        ("  商品仕入れ原価（×45%）",               c_data["ec_cogs_item"],  "normal",  "sum",    "#,##0"),
-        ("  TikTok Shop手数料（M1-3:3%→M4-:7%）", c_data["ec_fee"],        "normal",  "sum",    "#,##0"),
-        ("  ギャル協会RS・物販（×15%）",           c_data["ec_gal_rs"],     "normal",  "sum",    "#,##0"),
-        ("  物流・梱包費（×4%）",                  c_data["ec_logistics"],  "normal",  "sum",    "#,##0"),
-        ("  在庫損失引当（×1%）",                  c_data["ec_inv_loss"],   "normal",  "sum",    "#,##0"),
-        ("  EC原価合計",                           c_data["ec_cogs"],       "sub",     "sum",    "#,##0"),
-        ("  TikTok Shop 粗利",                     c_data["ec_gross_pft"],"ec_gross","sum",    "#,##0"),
-        ("  TikTok Shop 粗利率",                   c_data["ec_gp_r"],   "rate",      "avg_nz", None),
+        ("  ※ECコミッション（原価ゼロ）→ ギャル協会がショップオーナー", None, "kpi_sub", None, None),
         ("", None, "blank", None, None),
-        ("売上原価合計",                           c_data["cogs_total"],"total_cost","sum",    "#,##0"),
-        ("粗利益合計",                             c_data["gross_total"],"gross",    "sum",    "#,##0"),
-        ("粗利率（合計）",                         c_data["gp_rate"],   "rate",      "avg_nz", None),
+        ("売上原価合計",                                    c_data["cogs_total"],    "total_cost","sum",  "#,##0"),
+        ("粗利益合計",                                      c_data["gross_total"],   "gross",   "sum",   "#,##0"),
+        ("粗利率（合計）",                                  c_data["gp_rate"],       "rate",    "avg_nz", None),
         ("", None, "blank", None, None),
-        ("【販売管理費】",                         None,    "sec",       None,  "#,##0"),
-        ("  広告費（TK/IG広告運用）",              sc["ad_exp"],"normal", "sum", "#,##0"),
-        ("  人件費（バズ社員）",                   sc["labor"], "normal", "sum", "#,##0"),
-        ("  その他販管費",                         sc["other"], "normal", "sum", "#,##0"),
-        ("  ENTIAL業務委託費（TIE×5%＋EC×3%）",  c_data["ential_fee"],"normal","sum","#,##0"),
-        ("販売管理費合計",                         c_data["sga"],"total_cost","sum","#,##0"),
+        ("【販売管理費】",                                   None,                    "sec",     None,    "#,##0"),
+        ("  広告費（TK/IG広告運用）",                       sc["ad_exp"],            "normal",  "sum",   "#,##0"),
+        ("  人件費（バズ社員）",                             sc["labor"],             "normal",  "sum",   "#,##0"),
+        ("  その他販管費",                                   sc["other"],             "normal",  "sum",   "#,##0"),
+        ("  ENTIAL業務委託費（TIE×5%）",                   c_data["ential_fee"],    "normal",  "sum",   "#,##0"),
+        ("販売管理費合計",                                   c_data["sga"],           "total_cost","sum", "#,##0"),
         ("", None, "blank", None, None),
-        ("営業利益",                               c_data["op_profit"], "op",   "sum",    "#,##0"),
-        ("営業利益率",                             c_data["op_rate"],   "rate", "avg_nz", None),
+        ("営業利益",                                        c_data["op_profit"],     "op",      "sum",   "#,##0"),
+        ("営業利益率",                                      c_data["op_rate"],       "rate",    "avg_nz", None),
     ]
 
     for (label, vals, style, agg_method, num_fmt) in pl_rows:
@@ -416,9 +400,8 @@ def build_pl_sheet(ws, sc):
     ws.row_dimensions[ROW].height = 14
     ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
     fcell = ws.cell(row=ROW, column=1,
-        value="【注記】単位：万円 ／ ギャル協会：出演・監修料=件数×25万（月最低保証10万）＋EC RS 15% ／ "
-              "制作費：TIE売上×10% ／ EC原価合計72%（仕入45%＋TK手数料M1-3:3%/M4-:7%＋RS15%＋物流4%＋在庫損失1%）／ "
-              "ENTIAL：完全成功報酬（TIE×5%＋EC×3%、固定費ゼロ）")
+        value="【注記】単位：万円 ／ ギャル協会：出演・監修料=件数×25万（最低保証10万）、EC物販はギャル協会がショップオーナー（バズに原価なし） ／ "
+              "バズEC収益=アフィリエイトコミッション（EC実売上×20%） ／ 制作費：TIE×10% ／ ENTIAL：TIE成功報酬×5%（EC運用除外）")
     fcell.font = Font(name="Meiryo UI", size=8, color=GRY_TXT, italic=True)
     fcell.fill = PatternFill("solid", fgColor=LT_GRY)
     fcell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -480,20 +463,21 @@ def build_comparison_sheet(ws):
 
     # サマリー行
     rows_data = [
-        ("売上合計（万円）",      [sum(sc["c"]["rev_total"]) for sc in SCENARIOS],   "#,##0"),
-        ("  ├ タイアップ売上",   [sum(sc["c"]["tie_total"]) for sc in SCENARIOS],   "#,##0"),
-        ("  └ EC売上（TikTok Shop）",[sum(sc["c"]["ec_gross"]) for sc in SCENARIOS], "#,##0"),
-        ("粗利合計（万円）",      [sum(sc["c"]["gross_total"]) for sc in SCENARIOS], "#,##0"),
-        ("粗利率",                [round(sum(sc["c"]["gross_total"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
-        ("販管費合計（万円）",    [sum(sc["c"]["sga"]) for sc in SCENARIOS],         "#,##0"),
-        ("  ├ うちENTIAL成功報酬",[sum(sc["c"]["ential_fee"]) for sc in SCENARIOS],  "#,##0"),
-        ("営業利益（万円）",      [sum(sc["c"]["op_profit"]) for sc in SCENARIOS],   "#,##0"),
-        ("営業利益率",            [round(sum(sc["c"]["op_profit"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
-        ("損益分岐点",            [f"M{sc['c']['bep_month']+1}" if sc['c']['bep_month'] is not None else "達成せず" for sc in SCENARIOS], None),
-        ("Year1末 TKフォロワー", [sc["tk_fw"][-1] for sc in SCENARIOS], "#,##0"),
-        ("Year1末 IGフォロワー", [sc["ig_fw"][-1] for sc in SCENARIOS], "#,##0"),
-        ("Year1 タイアップ累計社数", [sum(sc["tk_cases"])+sum(sc["ig_cases"]) for sc in SCENARIOS], "#,##0"),
-        ("Year1 EC累計注文件数", [sum(sc["ec_units"]) for sc in SCENARIOS], "#,##0"),
+        ("売上合計（万円）",              [sum(sc["c"]["rev_total"]) for sc in SCENARIOS],      "#,##0"),
+        ("  ├ タイアップ売上",           [sum(sc["c"]["tie_total"]) for sc in SCENARIOS],      "#,##0"),
+        ("  └ ECアフィリエイトコミッション（×20%）",[sum(sc["c"]["ec_commission"]) for sc in SCENARIOS], "#,##0"),
+        ("  ※EC実売上（ギャル協会側・参考）",[sum(sc["c"]["ec_gross"]) for sc in SCENARIOS],   "#,##0"),
+        ("粗利合計（万円）",              [sum(sc["c"]["gross_total"]) for sc in SCENARIOS],    "#,##0"),
+        ("粗利率",                        [round(sum(sc["c"]["gross_total"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
+        ("販管費合計（万円）",            [sum(sc["c"]["sga"]) for sc in SCENARIOS],            "#,##0"),
+        ("  うちENTIAL成功報酬（TIE×5%）",[sum(sc["c"]["ential_fee"]) for sc in SCENARIOS],   "#,##0"),
+        ("営業利益（万円）",              [sum(sc["c"]["op_profit"]) for sc in SCENARIOS],      "#,##0"),
+        ("営業利益率",                    [round(sum(sc["c"]["op_profit"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
+        ("損益分岐点",                    [f"M{sc['c']['bep_month']+1}" if sc['c']['bep_month'] is not None else "達成せず" for sc in SCENARIOS], None),
+        ("Year1末 TKフォロワー",          [sc["tk_fw"][-1] for sc in SCENARIOS],               "#,##0"),
+        ("Year1末 IGフォロワー",          [sc["ig_fw"][-1] for sc in SCENARIOS],               "#,##0"),
+        ("Year1 タイアップ累計社数",      [sum(sc["tk_cases"])+sum(sc["ig_cases"]) for sc in SCENARIOS], "#,##0"),
+        ("Year1 EC累計注文件数（参考）",  [sum(sc["ec_units"]) for sc in SCENARIOS],            "#,##0"),
     ]
     for ri, (label, vals, fmt) in enumerate(rows_data):
         ROW += 1
@@ -532,20 +516,20 @@ def build_comparison_sheet(ws):
 
     payout_rows = [
         ("【ギャル協会 受取合計】",
-         [sum(sc["c"]["tie_license"]) + sum(sc["c"]["ec_gal_rs"]) for sc in SCENARIOS],
+         [sum(sc["c"]["tie_license"]) for sc in SCENARIOS],
          "#,##0", True),
-        ("  ├ 出演・監修料（件数×25万）",
+        ("  出演・監修料（件数×25万・最低保証10万）",
          [sum(sc["c"]["tie_license"]) for sc in SCENARIOS], "#,##0", False),
-        ("  └ EC レベニューシェア（×15%）",
-         [sum(sc["c"]["ec_gal_rs"]) for sc in SCENARIOS], "#,##0", False),
-        ("【ENTIAL 受取合計】（成功報酬）",
+        ("  ※EC物販収益はギャル協会のショップ利益（バズPL外）",
+         [0 for _ in SCENARIOS], "#,##0", False),
+        ("【ENTIAL 受取合計】（TIE成功報酬のみ）",
          [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", True),
-        ("  ├ TIEタイアップ成功報酬（×5%）",
-         [sum(round(t * 0.05) for t in sc["c"]["tie_total"]) for sc in SCENARIOS],
-         "#,##0", False),
-        ("  └ EC成功報酬（×3%）",
-         [sum(round(e * 0.03) for e in sc["c"]["ec_gross"]) for sc in SCENARIOS],
-         "#,##0", False),
+        ("  タイアップ成功報酬（TIE×5%）",
+         [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", False),
+        ("  ※体験事業元締め収益は別途（バズPL外）",
+         [0 for _ in SCENARIOS], "#,##0", False),
+        ("【バズ ECコミッション収益】",
+         [sum(sc["c"]["ec_commission"]) for sc in SCENARIOS], "#,##0", True),
         ("【バズ 営業利益（手残り）】",
          [sum(sc["c"]["op_profit"]) for sc in SCENARIOS], "#,##0", True),
     ]
