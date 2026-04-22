@@ -122,7 +122,7 @@ def compute(sc):
     cogs_total  = tie_cogs
     gross_total = [r - c for r, c in zip(rev_total, cogs_total)]
 
-    # ENTIAL成功報酬: TIEのみ×5%（EC運用から除外のため EC×3%削除）
+    # ENTIAL成功報酬: TIE×5%（体験事業元締めがENTIALの主収益、EC成功報酬は廃止）
     ential_fee = [round(t * 0.05) for t in tie_total]
 
     sga = [a + l + o + en
@@ -357,12 +357,11 @@ def build_pl_sheet(ws, sc):
 
         # 合計列
         non_z2 = [v for v in vals if v != 0]
+        fmt2 = '0.0"%"' if is_rate else (num_fmt or "#,##0")
         if agg_method == "avg_nz":
-            agg_v  = round(sum(non_z2)/len(non_z2), 1) if non_z2 else 0.0
-            fmt2   = '0.0"%"' if is_rate else (num_fmt or "#,##0")
+            agg_v = round(sum(non_z2)/len(non_z2), 1) if non_z2 else 0.0
         else:
             agg_v = sum(vals)
-            fmt2  = '0.0"%"' if is_rate else (num_fmt or "#,##0")
 
         disp_agg = "-" if (agg_v == 0 and style == "kpi_sub") else agg_v
         cell3 = ws.cell(row=ROW, column=14, value=disp_agg)
@@ -521,13 +520,13 @@ def build_comparison_sheet(ws):
         ("  出演・監修料（件数×25万・最低保証10万）",
          [sum(sc["c"]["tie_license"]) for sc in SCENARIOS], "#,##0", False),
         ("  ※EC物販収益はギャル協会のショップ利益（バズPL外）",
-         [0 for _ in SCENARIOS], "#,##0", False),
+         ["-"] * len(SCENARIOS), None, False),
         ("【ENTIAL 受取合計】（TIE成功報酬のみ）",
          [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", True),
         ("  タイアップ成功報酬（TIE×5%）",
          [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", False),
         ("  ※体験事業元締め収益は別途（バズPL外）",
-         [0 for _ in SCENARIOS], "#,##0", False),
+         ["-"] * len(SCENARIOS), None, False),
         ("【バズ ECコミッション収益】",
          [sum(sc["c"]["ec_commission"]) for sc in SCENARIOS], "#,##0", True),
         ("【バズ 営業利益（手残り）】",
