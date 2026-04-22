@@ -122,8 +122,10 @@ def compute(sc):
     cogs_total  = tie_cogs
     gross_total = [r - c for r, c in zip(rev_total, cogs_total)]
 
-    # ENTIAL成功報酬: TIE×5%（体験事業元締めがENTIALの主収益、EC成功報酬は廃止）
-    ential_fee = [round(t * 0.05) for t in tie_total]
+    # ENTIAL: M1-M3は固定サポート費20万/月 + TIE×5%、M4以降はTIE×5%のみ
+    ential_setup   = [20 if i < 3 else 0 for i in range(12)]
+    ential_success = [round(t * 0.05) for t in tie_total]
+    ential_fee     = [s + f for s, f in zip(ential_success, ential_setup)]
 
     sga = [a + l + o + en
            for a, l, o, en in zip(sc["ad_exp"], sc["labor"], sc["other"], ential_fee)]
@@ -144,7 +146,7 @@ def compute(sc):
         tie_license=tie_license, tie_prod=tie_prod, tie_cogs=tie_cogs,
         tie_gross=tie_gross, tie_gp_r=tie_gp_r,
         cogs_total=cogs_total, gross_total=gross_total, gp_rate=gp_rate,
-        ential_fee=ential_fee,
+        ential_setup=ential_setup, ential_success=ential_success, ential_fee=ential_fee,
         sga=sga, op_profit=op_profit, op_rate=op_rate, bep_month=bep_month,
     )
 
@@ -312,7 +314,8 @@ def build_pl_sheet(ws, sc):
         ("  広告費（TK/IG広告運用）",                       sc["ad_exp"],            "normal",  "sum",   "#,##0"),
         ("  人件費（バズ社員）",                             sc["labor"],             "normal",  "sum",   "#,##0"),
         ("  その他販管費",                                   sc["other"],             "normal",  "sum",   "#,##0"),
-        ("  ENTIAL業務委託費（TIE×5%）",                   c_data["ential_fee"],    "normal",  "sum",   "#,##0"),
+        ("  ENTIAL固定サポート費（M1-3・20万/月）",           c_data["ential_setup"],  "normal",  "sum",   "#,##0"),
+        ("  ENTIAL成功報酬（TIE×5%）",                     c_data["ential_success"],"normal",  "sum",   "#,##0"),
         ("販売管理費合計",                                   c_data["sga"],           "total_cost","sum", "#,##0"),
         ("", None, "blank", None, None),
         ("営業利益",                                        c_data["op_profit"],     "op",      "sum",   "#,##0"),
@@ -400,7 +403,8 @@ def build_pl_sheet(ws, sc):
     ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
     fcell = ws.cell(row=ROW, column=1,
         value="【注記】単位：万円 ／ ギャル協会：出演・監修料=件数×25万（最低保証10万）、EC物販はギャル協会がショップオーナー（バズに原価なし） ／ "
-              "バズEC収益=アフィリエイトコミッション（EC実売上×20%） ／ 制作費：TIE×10% ／ ENTIAL：TIE成功報酬×5%（EC運用除外）")
+              "バズEC収益=アフィリエイトコミッション（EC実売上×20%） ／ 制作費：TIE×10% ／ "
+              "ENTIAL：固定サポート費20万/月（M1-3のみ）＋TIE成功報酬×5%")
     fcell.font = Font(name="Meiryo UI", size=8, color=GRY_TXT, italic=True)
     fcell.fill = PatternFill("solid", fgColor=LT_GRY)
     fcell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
@@ -521,10 +525,12 @@ def build_comparison_sheet(ws):
          [sum(sc["c"]["tie_license"]) for sc in SCENARIOS], "#,##0", False),
         ("  ※EC物販収益はギャル協会のショップ利益（バズPL外）",
          ["-"] * len(SCENARIOS), None, False),
-        ("【ENTIAL 受取合計】（TIE成功報酬のみ）",
+        ("【ENTIAL 受取合計】",
          [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", True),
-        ("  タイアップ成功報酬（TIE×5%）",
-         [sum(sc["c"]["ential_fee"]) for sc in SCENARIOS], "#,##0", False),
+        ("  固定サポート費（M1-3・20万/月）",
+         [sum(sc["c"]["ential_setup"]) for sc in SCENARIOS], "#,##0", False),
+        ("  TIE成功報酬（TIE×5%）",
+         [sum(sc["c"]["ential_success"]) for sc in SCENARIOS], "#,##0", False),
         ("  ※体験事業元締め収益は別途（バズPL外）",
          ["-"] * len(SCENARIOS), None, False),
         ("【バズ ECコミッション収益】",
