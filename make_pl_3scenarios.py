@@ -634,163 +634,274 @@ def build_comparison_sheet(ws):
 
 
 # ═══════════════════════════════════════════════════════
-# 内訳シート生成関数（バズの支払先ごとに整理）
+# 単価内訳シート（1件あたり収支：TKタイ / IGタイ / TikTok Shop）
 # ═══════════════════════════════════════════════════════
-def build_breakdown_sheet(ws, sc):
-    """バズが誰にいくら払うか、月次で確認できる支払い内訳シート"""
-    c_data = sc["c"]
-    header_col = sc["header_color"]
-    bep = c_data["bep_month"]
+def build_unit_economics_sheet(ws):
+    """1件売れたときにお金がどう流れるかをプラン別に整理"""
 
-    ws.column_dimensions["A"].width = 38
-    for col in range(2, 15):
-        ws.column_dimensions[get_column_letter(col)].width = 10
+    def avg_ec_yen(sc):
+        total_units = sum(sc["ec_units"])
+        if total_units == 0:
+            return 0
+        return round(sum(sc["c"]["ec_gross"]) * 10000 / total_units, -2)
+
+    ec_prices = [avg_ec_yen(sc) for sc in SCENARIOS]
+
+    ws.column_dimensions["A"].width = 36
+    ws.column_dimensions["B"].width = 20
+    ws.column_dimensions["C"].width = 20
+    ws.column_dimensions["D"].width = 20
+    ws.column_dimensions["E"].width = 26
 
     ROW = 1
     ws.row_dimensions[ROW].height = 38
-    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
     cell = ws.cell(row=ROW, column=1,
-                   value=f"{sc['title']}  ／  バズ 収益・支払い内訳（月次）")
-    cell.font = Font(name="Meiryo UI", bold=True, size=16, color=WHITE)
-    cell.fill = PatternFill("solid", fgColor=header_col)
+                   value="1件あたり 収支内訳　｜　TKタイアップ / IGタイアップ / TikTok Shop")
+    cell.font = Font(name="Meiryo UI", bold=True, size=15, color=WHITE)
+    cell.fill = PatternFill("solid", fgColor=NAVY)
     cell.alignment = Alignment(horizontal="center", vertical="center")
 
     ROW += 1
     ws.row_dimensions[ROW].height = 16
-    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
     cell = ws.cell(row=ROW, column=1,
-                   value="バズが誰にいくら支払うか月次で確認できます　単位：万円")
+                   value="1件・1注文売れたときにバズが誰にいくら払うか　｜　タイアップ単位：万円　EC単位：円")
     cell.font = Font(name="Meiryo UI", size=9, color="CCCCCC")
     cell.fill = PatternFill("solid", fgColor=NAVY2)
     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    ROW += 1
-    ws.row_dimensions[ROW].height = 26
-    set_cell(ws, ROW, 1, "項目", bold=True, sz=10, fg=WHITE, bg=BLUE)
-    for i, m in enumerate(MONTHS):
-        set_cell(ws, ROW, 2+i, m, bold=True, sz=10, fg=WHITE, bg=BLUE)
-    set_cell(ws, ROW, 14, "Year1合計", bold=True, sz=10, fg=WHITE, bg=BLUE)
-    HDR_ROW = ROW
-
-    rows = [
-        # ── 収益 ──────────────────────────────────
-        ("【バズ 収益内訳】",                                     None,                    "sec",      None,     "#,##0"),
-        ("  ① TKタイアップ売上",                                  c_data["tk_tie"],        "normal",   "sum",    "#,##0"),
-        ("     受注社数（社）",                                   sc["tk_cases"],          "kpi_sub",  "sum",    "#,##0"),
-        ("  ② IGタイアップ売上",                                  c_data["ig_tie"],        "normal",   "sum",    "#,##0"),
-        ("     受注社数（社）",                                   sc["ig_cases"],          "kpi_sub",  "sum",    "#,##0"),
-        ("  タイアップ売上計",                                    c_data["tie_total"],     "sub",      "sum",    "#,##0"),
-        ("  ③ ECアフィリエイトコミッション（×20%）",              c_data["ec_commission"], "normal",   "sum",    "#,##0"),
-        ("     ※EC実売上（ギャル協会ショップ・参考）",            c_data["ec_gross"],      "kpi_sub",  "sum",    "#,##0"),
-        ("バズ 売上合計",                                         c_data["rev_total"],     "total_rev","sum",    "#,##0"),
-        ("", None, "blank", None, None),
-
-        # ── バズ→ギャル協会 ──────────────────────
-        ("【バズ → ギャル協会 への支払い】",                       None,                    "sec",      None,     "#,##0"),
-        ("  出演・監修料（件数×25万・最低保証10万）",             c_data["tie_license"],   "normal",   "sum",    "#,##0"),
-        ("     タイアップ件数（社）",                             c_data["gal_cases"],     "kpi_sub",  "sum",    "#,##0"),
-        ("", None, "blank", None, None),
-
-        # ── バズ→制作費 ──────────────────────────
-        ("【バズ → コンテンツ制作費】",                            None,                    "sec",      None,     "#,##0"),
-        ("  制作費（タイアップ売上×10%）",                       c_data["tie_prod"],      "normal",   "sum",    "#,##0"),
-        ("", None, "blank", None, None),
-
-        # ── タイアップ原価まとめ ──────────────────
-        ("タイアップ原価合計（出演料＋制作費）",                  c_data["tie_cogs"],      "total_cost","sum",   "#,##0"),
-        ("タイアップ粗利",                                        c_data["tie_gross"],     "tie_gross","sum",    "#,##0"),
-        ("タイアップ粗利率",                                      c_data["tie_gp_r"],      "rate",     "avg_nz", None),
-        ("", None, "blank", None, None),
-        ("  ※ ECコミッション：バズの原価ゼロ（ギャル協会がショップオーナー）",
-                                                                  None,                    "kpi_sub",  None,     None),
-        ("", None, "blank", None, None),
-        ("バズ 粗利合計",                                         c_data["gross_total"],   "gross",    "sum",    "#,##0"),
-        ("粗利率（合計）",                                        c_data["gp_rate"],       "rate",     "avg_nz", None),
-        ("", None, "blank", None, None),
-
-        # ── バズ→広告・運営費 ────────────────────
-        ("【バズ → 広告・運営費】",                                None,                    "sec",      None,     "#,##0"),
-        ("  広告費（TK/IG広告運用）",                            sc["ad_exp"],            "normal",   "sum",    "#,##0"),
-        ("  人件費（バズ社員）",                                  sc["labor"],             "normal",   "sum",    "#,##0"),
-        ("  その他販管費",                                        sc["other"],             "normal",   "sum",    "#,##0"),
-        ("", None, "blank", None, None),
-
-        # ── バズ→ENTIAL ──────────────────────────
-        ("【バズ → ENTIAL 成功報酬】",                             None,                    "sec",      None,     "#,##0"),
-        ("  ENTIAL業務委託費（TIE×5%）",                        c_data["ential_fee"],    "normal",   "sum",    "#,##0"),
-        ("", None, "blank", None, None),
-
-        # ── 販管費合計・手残り ────────────────────
-        ("販売管理費合計",                                        c_data["sga"],           "total_cost","sum",   "#,##0"),
-        ("", None, "blank", None, None),
-        ("バズ 営業利益（手残り）",                               c_data["op_profit"],     "op",       "sum",    "#,##0"),
-        ("営業利益率",                                            c_data["op_rate"],       "rate",     "avg_nz", None),
-    ]
-
-    for (label, vals, style, agg_method, num_fmt) in rows:
-        ROW += 1
-        ws.row_dimensions[ROW].height = (6 if style == "blank"
-                                         else 15 if style == "kpi_sub" else 18)
-        st = STYLE[style]
-        cell = ws.cell(row=ROW, column=1, value=label)
-        cell.font = Font(name="Meiryo UI", bold=st["bold"], size=st["sz"], color=st["fg"])
-        cell.fill = PatternFill("solid", fgColor=st["bg"])
-        cell.alignment = Alignment(horizontal=st["ha"], vertical="center", indent=1)
-
-        if vals is None:
-            fill_empty_row(ws, ROW, 2, 14, st["bg"])
-            continue
-
-        is_rate = (style == "rate")
-        cell_fmt = ('0.0"%"' if is_rate else (num_fmt or "#,##0"))
-
-        for j, v in enumerate(vals):
-            col = 2 + j
-            disp_val = "-" if (v == 0 and style == "kpi_sub") else v
-            cell2 = ws.cell(row=ROW, column=col, value=disp_val)
-            if style == "op" and j == bep:
-                cell2.fill = PatternFill("solid", fgColor=GREEN)
-                cell2.font = Font(name="Meiryo UI", bold=True, size=st["sz"], color=WHITE)
-            else:
-                cell2.fill = PatternFill("solid", fgColor=st["bg"])
-                fg_v = (WHITE if style == "op" and v >= 0
-                        else "FFCCCC" if style == "op" and v < 0
-                        else "145A32" if (style in ("gross", "ec_gross", "tie_gross") and v >= 0)
-                        else RED_ACC if (style in ("gross", "ec_gross", "tie_gross") and v < 0)
-                        else st["fg"])
-                cell2.font = Font(name="Meiryo UI", bold=st["bold"], size=st["sz"], color=fg_v)
-            cell2.alignment = Alignment(horizontal="center", vertical="center")
-            if disp_val != "-":
-                cell2.number_format = cell_fmt
-
-        non_z2 = [v for v in vals if v != 0]
-        fmt2 = '0.0"%"' if is_rate else (num_fmt or "#,##0")
-        if agg_method == "avg_nz":
-            agg_v = round(sum(non_z2)/len(non_z2), 1) if non_z2 else 0.0
-        else:
-            agg_v = sum(vals)
-
-        disp_agg = "-" if (agg_v == 0 and style == "kpi_sub") else agg_v
-        cell3 = ws.cell(row=ROW, column=14, value=disp_agg)
-        fg3 = (WHITE if style == "op" else
-               ("145A32" if (style in ("gross", "ec_gross", "tie_gross") and agg_v >= 0)
-                else RED_ACC if (style in ("gross", "ec_gross", "tie_gross") and agg_v < 0)
-                else st["fg"]))
-        bg3 = (GREEN if (style == "op" and agg_v >= 0)
-               else RED_ACC if (style == "op" and agg_v < 0)
-               else st["bg"])
-        cell3.font = Font(name="Meiryo UI", bold=True, size=st["sz"], color=fg3)
-        cell3.fill = PatternFill("solid", fgColor=bg3)
-        cell3.alignment = Alignment(horizontal="center", vertical="center")
-        if disp_agg != "-":
-            cell3.number_format = fmt2
-
+    # ── ヘルパー ──────────────────────────────────────
     thin = Side(style="thin", color="DDDDDD")
-    for row in ws.iter_rows(min_row=HDR_ROW, max_row=ROW, min_col=1, max_col=14):
+
+    def hdr(row, label):
+        """セクションヘッダー行（5列結合）"""
+        ws.row_dimensions[row].height = 26
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=5)
+        c = ws.cell(row=row, column=1, value=label)
+        c.font = Font(name="Meiryo UI", bold=True, size=12, color=WHITE)
+        c.fill = PatternFill("solid", fgColor=BLUE)
+        c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    def col_hdr(row, sc_labels):
+        """列ヘッダー行（項目＋3シナリオ＋備考）"""
+        ws.row_dimensions[row].height = 22
+        set_cell(ws, row, 1, "項目", bold=True, sz=10, fg=WHITE, bg=BLUE)
+        colors = [NAVY, ORG_ACC, RED_ACC]
+        for i, (label, col) in enumerate(zip(sc_labels, colors)):
+            set_cell(ws, row, 2+i, label, bold=True, sz=10, fg=WHITE, bg=col)
+        set_cell(ws, row, 5, "備考", bold=True, sz=10, fg=WHITE, bg=BLUE)
+
+    def data_row(row, label, vals, note="", bold=False, bg=None,
+                 fg_label=None, fmt="#,##0", is_minus=False, is_result=False):
+        ws.row_dimensions[row].height = 20
+        bg_use = bg or (LT_BLUE if is_result else WHITE)
+        fg_use = fg_label or ("1A3A6B" if is_result else "333333")
+        set_cell(ws, row, 1, label, bold=bold or is_result, sz=10,
+                 fg=fg_use, bg=bg_use, ha="left", indent=1)
+        for i, v in enumerate(vals):
+            if v is None:
+                set_cell(ws, row, 2+i, "─", bold=False, sz=10, fg=GRY_TXT, bg=bg_use)
+                continue
+            if is_result:
+                fg_v = GREEN if v >= 0 else RED_ACC
+                bg_v = LT_GRN if v >= 0 else LT_RED
+            elif is_minus:
+                fg_v, bg_v = RED_ACC, LT_RED
+            else:
+                fg_v, bg_v = ("333333", bg_use)
+            c2 = ws.cell(row=row, column=2+i, value=v)
+            c2.font = Font(name="Meiryo UI", bold=bold or is_result, size=10, color=fg_v)
+            c2.fill = PatternFill("solid", fgColor=bg_v)
+            c2.alignment = Alignment(horizontal="center", vertical="center")
+            if fmt:
+                c2.number_format = fmt
+        set_cell(ws, row, 5, note, bold=False, sz=9, fg=GRY_TXT, bg=bg_use, ha="left", indent=1)
+
+    def rate_row(row, label, vals, note=""):
+        ws.row_dimensions[row].height = 17
+        set_cell(ws, row, 1, label, bold=False, sz=9, fg=GRY_TXT, bg=LT_GRY, ha="left", indent=2)
+        for i, v in enumerate(vals):
+            set_cell(ws, row, 2+i, v, bold=False, sz=9, fg=GRY_TXT, bg=LT_GRY,
+                     fmt='0.0"%"')
+        set_cell(ws, row, 5, note, bold=False, sz=9, fg=GRY_TXT, bg=LT_GRY, ha="left", indent=1)
+
+    def blank_row(row):
+        ws.row_dimensions[row].height = 8
+        for col in range(1, 6):
+            ws.cell(row=row, column=col).fill = PatternFill("solid", fgColor=WHITE)
+
+    # ── セクション 1: TikTokタイアップ 1件 ──────────────
+    ROW += 2
+    hdr(ROW, "① TikTokタイアップ　1件あたり収支　（単位：万円）")
+
+    ROW += 1
+    sc_labels = [f"①大成功\n（単価{sc['tk_atp_unit']}万）" for sc in SCENARIOS]
+    col_hdr(ROW, [f"①大成功（{sc['tk_atp_unit']}万/社）" for sc in SCENARIOS])
+
+    ROW += 1
+    data_row(ROW, "受注単価（バズ売上）",
+             [sc["tk_atp_unit"] for sc in SCENARIOS],
+             note="バズが企業から受け取る金額")
+    ROW += 1
+    data_row(ROW, "  → ギャル協会 出演・監修料",
+             [25 for _ in SCENARIOS],
+             note="件数×25万（固定）", is_minus=True)
+    ROW += 1
+    data_row(ROW, "  → コンテンツ制作費（売上×10%）",
+             [round(sc["tk_atp_unit"] * 0.10) for sc in SCENARIOS],
+             note="編集・字幕・投稿コスト", is_minus=True)
+    ROW += 1
+    tie_cogs = [25 + round(sc["tk_atp_unit"] * 0.10) for sc in SCENARIOS]
+    data_row(ROW, "タイアップ原価合計",
+             tie_cogs,
+             note="バズが払う原価の合計", bg=LT_GRY, bold=True,
+             fg_label="555555")
+    ROW += 1
+    tie_gp = [sc["tk_atp_unit"] - c for sc, c in zip(SCENARIOS, tie_cogs)]
+    data_row(ROW, "バズ 粗利（原価控除後）",
+             tie_gp,
+             note="ここからさらに販管費を引く", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  粗利率",
+             [round(g / sc["tk_atp_unit"] * 100, 1) for g, sc in zip(tie_gp, SCENARIOS)])
+    ROW += 1
+    ential = [round(sc["tk_atp_unit"] * 0.05) for sc in SCENARIOS]
+    data_row(ROW, "  → ENTIAL 成功報酬（売上×5%）",
+             ential,
+             note="販管費の中の変動費", is_minus=True)
+    ROW += 1
+    net = [g - e for g, e in zip(tie_gp, ential)]
+    data_row(ROW, "バズ 実質手残り（粗利 − ENTIAL）",
+             net,
+             note="広告費・人件費は別途発生", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  実質手残り率",
+             [round(n / sc["tk_atp_unit"] * 100, 1) for n, sc in zip(net, SCENARIOS)],
+             note="※広告費・人件費は月固定のため件数で変動")
+
+    # ── セクション 2: IGタイアップ 1件 ──────────────────
+    ROW += 2
+    blank_row(ROW)
+    ROW += 1
+    hdr(ROW, "② IGタイアップ　1件あたり収支　（単位：万円）")
+
+    ROW += 1
+    col_hdr(ROW, [f"①大成功（{sc['ig_atp_unit']}万/社）" for sc in SCENARIOS])
+
+    ROW += 1
+    data_row(ROW, "受注単価（バズ売上）",
+             [sc["ig_atp_unit"] for sc in SCENARIOS],
+             note="バズが企業から受け取る金額")
+    ROW += 1
+    data_row(ROW, "  → ギャル協会 出演・監修料",
+             [25 for _ in SCENARIOS],
+             note="件数×25万（固定）", is_minus=True)
+    ROW += 1
+    data_row(ROW, "  → コンテンツ制作費（売上×10%）",
+             [round(sc["ig_atp_unit"] * 0.10) for sc in SCENARIOS],
+             note="編集・字幕・投稿コスト", is_minus=True)
+    ROW += 1
+    ig_cogs = [25 + round(sc["ig_atp_unit"] * 0.10) for sc in SCENARIOS]
+    data_row(ROW, "タイアップ原価合計",
+             ig_cogs,
+             note="バズが払う原価の合計", bg=LT_GRY, bold=True, fg_label="555555")
+    ROW += 1
+    ig_gp = [sc["ig_atp_unit"] - c for sc, c in zip(SCENARIOS, ig_cogs)]
+    data_row(ROW, "バズ 粗利（原価控除後）",
+             ig_gp,
+             note="ここからさらに販管費を引く", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  粗利率",
+             [round(g / sc["ig_atp_unit"] * 100, 1) for g, sc in zip(ig_gp, SCENARIOS)])
+    ROW += 1
+    ig_ential = [round(sc["ig_atp_unit"] * 0.05) for sc in SCENARIOS]
+    data_row(ROW, "  → ENTIAL 成功報酬（売上×5%）",
+             ig_ential,
+             note="販管費の中の変動費", is_minus=True)
+    ROW += 1
+    ig_net = [g - e for g, e in zip(ig_gp, ig_ential)]
+    data_row(ROW, "バズ 実質手残り（粗利 − ENTIAL）",
+             ig_net,
+             note="広告費・人件費は別途発生", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  実質手残り率",
+             [round(n / sc["ig_atp_unit"] * 100, 1) for n, sc in zip(ig_net, SCENARIOS)])
+
+    # ── セクション 3: TikTok Shop 1注文 ─────────────────
+    ROW += 2
+    blank_row(ROW)
+    ROW += 1
+    hdr(ROW, "③ TikTok Shop　1注文あたり収支　（単位：円）")
+
+    ROW += 1
+    col_hdr(ROW, [f"①大成功（平均{int(ec_prices[0]):,}円）",
+                  f"②及第点（平均{int(ec_prices[1]):,}円）",
+                  f"③撤退（平均{int(ec_prices[2]):,}円）"])
+
+    ROW += 1
+    data_row(ROW, "平均注文単価（ギャル協会 EC売上）",
+             [int(p) for p in ec_prices],
+             note="シナリオ別の年間加重平均", fmt="#,##0")
+
+    ROW += 1
+    ws.row_dimensions[ROW].height = 14
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
+    c = ws.cell(row=ROW, column=1, value="  ▸ バズの収益（アフィリエイトコミッション）")
+    c.font = Font(name="Meiryo UI", bold=True, size=9, color=NAVY)
+    c.fill = PatternFill("solid", fgColor=LT_BLUE)
+    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    ROW += 1
+    ec_comm = [round(p * 0.20) for p in ec_prices]
+    data_row(ROW, "  バズ受取（×20% コミッション）",
+             [int(v) for v in ec_comm],
+             note="バズの原価ゼロ・丸々粗利", fmt="#,##0", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  バズ粗利率", [100.0, 100.0, 100.0],
+             note="EC原価はバズに発生しない")
+
+    ROW += 1
+    ws.row_dimensions[ROW].height = 14
+    ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=5)
+    c = ws.cell(row=ROW, column=1, value="  ▸ ギャル協会側の内訳（参考）")
+    c.font = Font(name="Meiryo UI", bold=True, size=9, color="145A32")
+    c.fill = PatternFill("solid", fgColor=LT_GRN2)
+    c.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    ROW += 1
+    ec_cogs = [round(p * 0.45) for p in ec_prices]
+    data_row(ROW, "  仕入原価（×45%）",
+             [int(v) for v in ec_cogs], note="OEM製造コスト", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_fee = [round(p * 0.07) for p in ec_prices]
+    data_row(ROW, "  TikTok Shop 手数料（×7%）",
+             [int(v) for v in ec_fee], note="プラットフォーム手数料", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_logi = [round(p * 0.04) for p in ec_prices]
+    data_row(ROW, "  物流費（×4%）",
+             [int(v) for v in ec_logi], note="発送・梱包コスト", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_loss = [round(p * 0.01) for p in ec_prices]
+    data_row(ROW, "  在庫損失（×1%）",
+             [int(v) for v in ec_loss], note="廃棄・返品ロス", fmt="#,##0", is_minus=True)
+    ROW += 1
+    data_row(ROW, "  バズへのアフィリエイトコミッション（×20%）",
+             [int(v) for v in ec_comm], note="バズへの支払い", fmt="#,##0", is_minus=True)
+    ROW += 1
+    ec_gal = [int(p) - c - f - l - ls - cm
+              for p, c, f, l, ls, cm in
+              zip(ec_prices, ec_cogs, ec_fee, ec_logi, ec_loss, ec_comm)]
+    data_row(ROW, "  ギャル協会 手残り（×23%相当）",
+             ec_gal, note="商品単価が上がるほど増える", fmt="#,##0", is_result=True)
+    ROW += 1
+    rate_row(ROW, "  ギャル協会 手残り率",
+             [round(g / p * 100, 1) for g, p in zip(ec_gal, ec_prices)])
+
+    # 枠線
+    for row in ws.iter_rows(min_row=1, max_row=ROW, min_col=1, max_col=5):
         for cell in row:
             cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
-
-    ws.freeze_panes = "B4"
 
 
 # ═══════════════════════════════════════════════════════
@@ -803,12 +914,37 @@ default_ws = wb.active
 ws_cmp = wb.create_sheet(title="比較・撤退基準", index=0)
 build_comparison_sheet(ws_cmp)
 
-# 各シナリオのPLシートと内訳シートを生成
+# 単価内訳シート（1件あたり収支）
+ws_unit = wb.create_sheet(title="単価内訳")
+build_unit_economics_sheet(ws_unit)
+
+# 各シナリオのPLシートを生成
 for sc in SCENARIOS:
     ws = wb.create_sheet(title=sc["sheet"])
     build_pl_sheet(ws, sc)
-    ws2 = wb.create_sheet(title=sc["sheet"] + "_内訳")
-    build_breakdown_sheet(ws2, sc)
+
+# デフォルトシート削除
+wb.remove(default_ws)
+
+
+# ═══════════════════════════════════════════════════════
+# メイン実行
+# ═══════════════════════════════════════════════════════
+wb = openpyxl.Workbook()
+default_ws = wb.active
+
+# 比較シートを最初に
+ws_cmp = wb.create_sheet(title="比較・撤退基準", index=0)
+build_comparison_sheet(ws_cmp)
+
+# 単価内訳シート（1件あたり収支）
+ws_unit = wb.create_sheet(title="単価内訳")
+build_unit_economics_sheet(ws_unit)
+
+# 各シナリオのPLシート
+for sc in SCENARIOS:
+    ws = wb.create_sheet(title=sc["sheet"])
+    build_pl_sheet(ws, sc)
 
 # デフォルトシート削除
 wb.remove(default_ws)
