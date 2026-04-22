@@ -37,7 +37,7 @@ SUCCESS = {
     "key": "success",
     "sheet": "①大成功",
     "title": "❶ 大成功パターン",
-    "subtitle": "Year1で売上1.5億・営業利益2,744万・M6損益分岐",
+    "subtitle": "Year1で売上1.5億・営業利益2,258万・M6損益分岐",
     "header_color": NAVY,
     "tk_cases": [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5],
     "ig_cases": [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4],
@@ -59,7 +59,7 @@ OK_PLAN = {
     "key": "ok",
     "sheet": "②及第点",
     "title": "❷ 及第点パターン",
-    "subtitle": "Year1で売上8,951万・営業利益872万・M7損益分岐",
+    "subtitle": "Year1で売上8,951万・営業利益615万・M7損益分岐",
     "header_color": ORG_ACC,
     "tk_cases": [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3],
     "ig_cases": [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3],
@@ -79,7 +79,7 @@ RETREAT = {
     "key": "retreat",
     "sheet": "③撤退",
     "title": "❸ 撤退パターン",
-    "subtitle": "Year1で売上1,171万・営業損失2,373万・M9末で撤退決定",
+    "subtitle": "Year1で売上1,171万・営業損失2,409万・M9末で撤退決定",
     "header_color": RED_ACC,
     "tk_cases": [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
     "ig_cases": [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
@@ -114,9 +114,14 @@ def compute(sc):
     tie_gross   = [t - cg for t, cg in zip(tie_total, tie_cogs)]
 
     ec_cogs_item = [round(e * 0.45) for e in ec_gross]
-    ec_fee       = [round(e * 0.06) for e in ec_gross]
+    # TikTok Shop手数料: 新規出店90日（M1〜3）は3%、M4以降は7%
+    ec_fee       = [round(e * (0.03 if i < 3 else 0.07)) for i, e in enumerate(ec_gross)]
     ec_gal_rs    = [round(e * 0.15) for e in ec_gross]
-    ec_cogs      = [c + f + g for c, f, g in zip(ec_cogs_item, ec_fee, ec_gal_rs)]
+    ec_logistics = [round(e * 0.04) for e in ec_gross]   # 物流・梱包費
+    ec_inv_loss  = [round(e * 0.01) for e in ec_gross]   # 在庫損失引当
+    ec_cogs      = [ci + f + g + l + il
+                    for ci, f, g, l, il in zip(ec_cogs_item, ec_fee, ec_gal_rs,
+                                               ec_logistics, ec_inv_loss)]
     ec_gross_pft = [e - c for e, c in zip(ec_gross, ec_cogs)]
 
     cogs_total  = [t + e for t, e in zip(tie_cogs, ec_cogs)]
@@ -145,6 +150,7 @@ def compute(sc):
         tie_license=tie_license, tie_prod=tie_prod, tie_cogs=tie_cogs,
         tie_gross=tie_gross, tie_gp_r=tie_gp_r,
         ec_cogs_item=ec_cogs_item, ec_fee=ec_fee, ec_gal_rs=ec_gal_rs,
+        ec_logistics=ec_logistics, ec_inv_loss=ec_inv_loss,
         ec_cogs=ec_cogs, ec_gross_pft=ec_gross_pft, ec_gp_r=ec_gp_r,
         cogs_total=cogs_total, gross_total=gross_total, gp_rate=gp_rate,
         ential_fee=ential_fee,
@@ -304,11 +310,13 @@ def build_pl_sheet(ws, sc):
         ("  タイアップ粗利",                       c_data["tie_gross"],"tie_gross", "sum",    "#,##0"),
         ("  タイアップ粗利率",                     c_data["tie_gp_r"], "rate",      "avg_nz", None),
         ("", None, "blank", None, None),
-        ("【TikTok Shop EC原価】",                 None,                "sec",       None,     "#,##0"),
-        ("  商品仕入れ原価（×45%）",               c_data["ec_cogs_item"],"normal",  "sum",    "#,##0"),
-        ("  TikTok Shop手数料（×6%）",             c_data["ec_fee"],    "normal",    "sum",    "#,##0"),
-        ("  ギャル協会RS・物販（×15%）",           c_data["ec_gal_rs"], "normal",    "sum",    "#,##0"),
-        ("  EC原価合計",                           c_data["ec_cogs"],   "sub",       "sum",    "#,##0"),
+        ("【TikTok Shop EC原価】",                     None,                    "sec",    None,     "#,##0"),
+        ("  商品仕入れ原価（×45%）",               c_data["ec_cogs_item"],  "normal",  "sum",    "#,##0"),
+        ("  TikTok Shop手数料（M1-3:3%→M4-:7%）", c_data["ec_fee"],        "normal",  "sum",    "#,##0"),
+        ("  ギャル協会RS・物販（×15%）",           c_data["ec_gal_rs"],     "normal",  "sum",    "#,##0"),
+        ("  物流・梱包費（×4%）",                  c_data["ec_logistics"],  "normal",  "sum",    "#,##0"),
+        ("  在庫損失引当（×1%）",                  c_data["ec_inv_loss"],   "normal",  "sum",    "#,##0"),
+        ("  EC原価合計",                           c_data["ec_cogs"],       "sub",     "sum",    "#,##0"),
         ("  TikTok Shop 粗利",                     c_data["ec_gross_pft"],"ec_gross","sum",    "#,##0"),
         ("  TikTok Shop 粗利率",                   c_data["ec_gp_r"],   "rate",      "avg_nz", None),
         ("", None, "blank", None, None),
@@ -409,7 +417,7 @@ def build_pl_sheet(ws, sc):
     ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=14)
     fcell = ws.cell(row=ROW, column=1,
         value="【注記】単位：万円 ／ ギャル協会：出演・監修料=件数×25万（月最低保証10万）＋EC RS 15% ／ "
-              "制作費：TIE売上×10% ／ EC原価率66%（仕入45%＋TK手数料6%＋ギャル協会RS15%）／ "
+              "制作費：TIE売上×10% ／ EC原価合計72%（仕入45%＋TK手数料M1-3:3%/M4-:7%＋RS15%＋物流4%＋在庫損失1%）／ "
               "ENTIAL：完全成功報酬（TIE×5%＋EC×3%、固定費ゼロ）")
     fcell.font = Font(name="Meiryo UI", size=8, color=GRY_TXT, italic=True)
     fcell.fill = PatternFill("solid", fgColor=LT_GRY)
