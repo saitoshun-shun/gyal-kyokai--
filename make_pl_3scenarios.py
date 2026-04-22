@@ -37,7 +37,7 @@ SUCCESS = {
     "key": "success",
     "sheet": "①大成功",
     "title": "❶ 大成功パターン",
-    "subtitle": "Year1でバズ売上8,519万・営業利益1,854万・M6損益分岐",
+    "subtitle": "Year1でバズ売上8,519万・M6損益分岐",
     "header_color": NAVY,
     "tk_cases": [0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 5],
     "ig_cases": [0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 3, 4],
@@ -59,7 +59,7 @@ OK_PLAN = {
     "key": "ok",
     "sheet": "②及第点",
     "title": "❷ 及第点パターン",
-    "subtitle": "Year1でバズ売上5,510万・営業利益397万・M7損益分岐",
+    "subtitle": "Year1でバズ売上5,510万・M7損益分岐",
     "header_color": ORG_ACC,
     "tk_cases": [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3],
     "ig_cases": [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3],
@@ -79,7 +79,7 @@ RETREAT = {
     "key": "retreat",
     "sheet": "③撤退",
     "title": "❸ 撤退パターン",
-    "subtitle": "Year1でバズ売上715万・営業損失2,435万・M9末で撤退決定",
+    "subtitle": "Year1でバズ売上715万・M9末で撤退決定",
     "header_color": RED_ACC,
     "tk_cases": [0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0],
     "ig_cases": [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
@@ -119,7 +119,8 @@ def compute(sc):
     tie_gross   = [t - cg for t, cg in zip(tie_total, tie_cogs)]
 
     # EC原価はバズに発生しない（ギャル協会がショップオーナー）
-    cogs_total  = tie_cogs
+    # 広告・集客費はCOGSに分類（売上獲得原価）
+    cogs_total  = [tc + ad for tc, ad in zip(tie_cogs, sc["ad_exp"])]
     gross_total = [r - c for r, c in zip(rev_total, cogs_total)]
 
     # ENTIAL: M1-M3は固定サポート費20万/月 + TIE×5%、M4以降はTIE×5%のみ
@@ -127,8 +128,12 @@ def compute(sc):
     ential_success = [round(t * 0.05) for t in tie_total]
     ential_fee     = [s + f for s, f in zip(ential_success, ential_setup)]
 
-    sga = [a + l + o + en
-           for a, l, o, en in zip(sc["ad_exp"], sc["labor"], sc["other"], ential_fee)]
+    # ギャル協会固定費（月額20万）: 出演料(per case)とは別の月額契約費
+    gal_fixed = [20] * 12
+
+    # 販管費: ①固定（人件費+ENTIAL固定+ギャル協会固定+その他）+ ②案件連動（TIE×5%）
+    sga = [l + o + gf + en
+           for l, o, gf, en in zip(sc["labor"], sc["other"], gal_fixed, ential_fee)]
     op_profit = [g - s for g, s in zip(gross_total, sga)]
     bep_month = next((i for i, v in enumerate(op_profit) if v > 0), None)
 
@@ -147,6 +152,7 @@ def compute(sc):
         tie_gross=tie_gross, tie_gp_r=tie_gp_r,
         cogs_total=cogs_total, gross_total=gross_total, gp_rate=gp_rate,
         ential_setup=ential_setup, ential_success=ential_success, ential_fee=ential_fee,
+        gal_fixed=gal_fixed,
         sga=sga, op_profit=op_profit, op_rate=op_rate, bep_month=bep_month,
     )
 
@@ -304,6 +310,9 @@ def build_pl_sheet(ws, sc):
         ("  タイアップ粗利",                                 c_data["tie_gross"],     "tie_gross","sum",  "#,##0"),
         ("  タイアップ粗利率",                               c_data["tie_gp_r"],      "rate",    "avg_nz", None),
         ("", None, "blank", None, None),
+        ("【広告・集客費】",                                 None,                    "sec",     None,    "#,##0"),
+        ("  TK/IG広告運用費",                               sc["ad_exp"],            "normal",  "sum",   "#,##0"),
+        ("", None, "blank", None, None),
         ("  ※ECコミッション（原価ゼロ）→ ギャル協会がショップオーナー", None, "kpi_sub", None, None),
         ("", None, "blank", None, None),
         ("売上原価合計",                                    c_data["cogs_total"],    "total_cost","sum",  "#,##0"),
@@ -311,10 +320,12 @@ def build_pl_sheet(ws, sc):
         ("粗利率（合計）",                                  c_data["gp_rate"],       "rate",    "avg_nz", None),
         ("", None, "blank", None, None),
         ("【販売管理費】",                                   None,                    "sec",     None,    "#,##0"),
-        ("  広告費（TK/IG広告運用）",                       sc["ad_exp"],            "normal",  "sum",   "#,##0"),
+        ("  ① 固定販売費",                                  None,                    "kpi_sub", None,    "#,##0"),
         ("  人件費（バズ社員）",                             sc["labor"],             "normal",  "sum",   "#,##0"),
+        ("  業務委託費・ENTIAL固定（M1-3・20万/月）",        c_data["ential_setup"],  "normal",  "sum",   "#,##0"),
+        ("  ギャル協会固定費（月20万）",                     c_data["gal_fixed"],     "normal",  "sum",   "#,##0"),
         ("  その他販管費",                                   sc["other"],             "normal",  "sum",   "#,##0"),
-        ("  ENTIAL固定サポート費（M1-3・20万/月）",           c_data["ential_setup"],  "normal",  "sum",   "#,##0"),
+        ("  ② 案件連動費",                                  None,                    "kpi_sub", None,    "#,##0"),
         ("  ENTIAL成功報酬（TIE×5%）",                     c_data["ential_success"],"normal",  "sum",   "#,##0"),
         ("販売管理費合計",                                   c_data["sga"],           "total_cost","sum", "#,##0"),
         ("", None, "blank", None, None),
@@ -470,10 +481,19 @@ def build_comparison_sheet(ws):
         ("  ├ タイアップ売上",           [sum(sc["c"]["tie_total"]) for sc in SCENARIOS],      "#,##0"),
         ("  └ ECアフィリエイトコミッション（×20%）",[sum(sc["c"]["ec_commission"]) for sc in SCENARIOS], "#,##0"),
         ("  ※EC実売上（ギャル協会側・参考）",[sum(sc["c"]["ec_gross"]) for sc in SCENARIOS],   "#,##0"),
+        ("売上原価合計（万円）",          [sum(sc["c"]["cogs_total"]) for sc in SCENARIOS],     "#,##0"),
+        ("  タイアップ原価（出演料＋制作費）",[sum(sc["c"]["tie_cogs"]) for sc in SCENARIOS],  "#,##0"),
+        ("  広告・集客費",               [sum(sc["ad_exp"]) for sc in SCENARIOS],               "#,##0"),
         ("粗利合計（万円）",              [sum(sc["c"]["gross_total"]) for sc in SCENARIOS],    "#,##0"),
         ("粗利率",                        [round(sum(sc["c"]["gross_total"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
         ("販管費合計（万円）",            [sum(sc["c"]["sga"]) for sc in SCENARIOS],            "#,##0"),
-        ("  うちENTIAL成功報酬（TIE×5%）",[sum(sc["c"]["ential_fee"]) for sc in SCENARIOS],   "#,##0"),
+        ("  ─ ① 固定販売費",
+         [sum(sc["labor"]) + sum(sc["other"]) + sum(sc["c"]["gal_fixed"]) + sum(sc["c"]["ential_setup"]) for sc in SCENARIOS], "#,##0"),
+        ("    人件費（バズ社員）",        [sum(sc["labor"]) for sc in SCENARIOS],                "#,##0"),
+        ("    業務委託費・ENTIAL固定（M1-3）",[sum(sc["c"]["ential_setup"]) for sc in SCENARIOS],"#,##0"),
+        ("    ギャル協会固定費（月20万）",[sum(sc["c"]["gal_fixed"]) for sc in SCENARIOS],      "#,##0"),
+        ("    その他販管費",              [sum(sc["other"]) for sc in SCENARIOS],                "#,##0"),
+        ("  ─ ② 案件連動費（TIE×5%）",  [sum(sc["c"]["ential_success"]) for sc in SCENARIOS], "#,##0"),
         ("営業利益（万円）",              [sum(sc["c"]["op_profit"]) for sc in SCENARIOS],      "#,##0"),
         ("営業利益率",                    [round(sum(sc["c"]["op_profit"])/sum(sc["c"]["rev_total"])*100,1) if sum(sc["c"]["rev_total"])>0 else 0 for sc in SCENARIOS], '0.0"%"'),
         ("損益分岐点",                    [f"M{sc['c']['bep_month']+1}" if sc['c']['bep_month'] is not None else "達成せず" for sc in SCENARIOS], None),
