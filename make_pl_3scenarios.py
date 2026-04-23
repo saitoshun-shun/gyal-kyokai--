@@ -433,10 +433,14 @@ def build_pl_sheet(ws, sc):
 # 比較・撤退基準シート生成関数
 # ═══════════════════════════════════════════════════════
 def build_comparison_sheet(ws):
-    # 列幅
+    # 列幅：A=ラベル、B-D=3シナリオ年合計、E=空白、F=M1〜Q=M12、R=Year1合計
     ws.column_dimensions["A"].width = 32
-    for col in range(2, 6):
+    for col in range(2, 5):
         ws.column_dimensions[get_column_letter(col)].width = 18
+    ws.column_dimensions["E"].width = 4   # 区切りスペース
+    for col in range(6, 19):              # F(M1) 〜 R(Year1合計)
+        ws.column_dimensions[get_column_letter(col)].width = 9
+    ws.column_dimensions[get_column_letter(18)].width = 11  # Year1合計列
 
     ROW = 1
     # タイトル
@@ -652,9 +656,129 @@ def build_comparison_sheet(ws):
         ws.merge_cells(start_row=ROW, start_column=2, end_row=ROW, end_column=5)
         set_cell(ws, ROW, 2, cond, bold=False, sz=9, fg="333333", bg=bg, ha="left", indent=1)
 
-    # 枠線
+    # ─── 月次PL（シナリオ別） ───
+    # 枠線（年合計セクション分）
     thin = Side(style="thin", color="DDDDDD")
     for row in ws.iter_rows(min_row=1, max_row=ROW, min_col=1, max_col=5):
+        for cell in row:
+            cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
+
+    MONTHLY_START_ROW = ROW + 2
+
+    for sc in SCENARIOS:
+        c = sc["c"]
+        hdr_col = sc["header_color"]
+
+        # 固定販管費（月別）
+        fixed_sga = [l + o + gf + es
+                     for l, o, gf, es in zip(sc["labor"], sc["other"],
+                                             c["gal_fixed"], c["ential_setup"])]
+
+        # セクションヘッダー
+        ROW += 2
+        ws.row_dimensions[ROW].height = 26
+        ws.merge_cells(start_row=ROW, start_column=1, end_row=ROW, end_column=18)
+        cell = ws.cell(row=ROW, column=1,
+                       value=f"▌ 月次PL　{sc['title']}　（単位：万円）")
+        cell.font = Font(name="Meiryo UI", bold=True, size=12, color=WHITE)
+        cell.fill = PatternFill("solid", fgColor=hdr_col)
+        cell.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+        # 列ヘッダー（M1〜M12 + Year1合計）
+        ROW += 1
+        ws.row_dimensions[ROW].height = 20
+        set_cell(ws, ROW, 1, "項目", bold=True, sz=9, fg=WHITE, bg=BLUE, ha="left", indent=1)
+        for m in range(12):
+            set_cell(ws, ROW, 6+m, f"M{m+1}", bold=True, sz=9, fg=WHITE, bg=BLUE, ha="center")
+        set_cell(ws, ROW, 18, "Year1合計", bold=True, sz=9, fg=WHITE, bg=NAVY, ha="center")
+
+        def mrow(label, vals, is_result=False, is_minus=False,
+                 is_sec=False, is_sub=False, bold=False):
+            nonlocal ROW
+            ROW += 1
+            ws.row_dimensions[ROW].height = 8 if vals is None and not is_sec else (15 if is_sub else 18)
+            if is_sec:
+                bg = "E8F0FE"
+                set_cell(ws, ROW, 1, label, bold=True, sz=9, fg="1A3A6B", bg=bg,
+                         ha="left", indent=1)
+                for m in range(12):
+                    ws.cell(row=ROW, column=6+m).fill = PatternFill("solid", fgColor=bg)
+                ws.cell(row=ROW, column=18).fill = PatternFill("solid", fgColor=bg)
+                return
+            if vals is None:
+                for col in range(1, 19):
+                    ws.cell(row=ROW, column=col).fill = PatternFill("solid", fgColor=WHITE)
+                return
+
+            if is_result:
+                lbl_bg, lbl_fg = LT_BLUE, "1A3A6B"
+            elif is_sub:
+                lbl_bg, lbl_fg = LT_GRY, GRY_TXT
+            else:
+                lbl_bg, lbl_fg = WHITE, "333333"
+
+            set_cell(ws, ROW, 1, label, bold=bold or is_result, sz=9,
+                     fg=lbl_fg, bg=lbl_bg, ha="left", indent=1)
+
+            total = sum(vals)
+            for m, v in enumerate(vals):
+                if is_result:
+                    fg_v = GREEN if v >= 0 else RED_ACC
+                    bg_v = LT_GRN if v >= 0 else LT_RED
+                elif is_minus:
+                    fg_v, bg_v = RED_ACC, LT_RED
+                elif is_sub:
+                    fg_v, bg_v = GRY_TXT, LT_GRY
+                else:
+                    fg_v, bg_v = "333333", WHITE
+                cell2 = ws.cell(row=ROW, column=6+m, value=v)
+                cell2.font = Font(name="Meiryo UI", bold=bold or is_result, size=9, color=fg_v)
+                cell2.fill = PatternFill("solid", fgColor=bg_v)
+                cell2.alignment = Alignment(horizontal="center", vertical="center")
+                cell2.number_format = "#,##0"
+
+            # Year1合計列
+            if is_result:
+                fg_t = GREEN if total >= 0 else RED_ACC
+                bg_t = LT_GRN if total >= 0 else LT_RED
+            elif is_minus:
+                fg_t, bg_t = RED_ACC, LT_RED
+            elif is_sub:
+                fg_t, bg_t = GRY_TXT, LT_GRY
+            else:
+                fg_t, bg_t = "1A3A6B", LT_BLUE
+            ct = ws.cell(row=ROW, column=18, value=total)
+            ct.font = Font(name="Meiryo UI", bold=True, size=9, color=fg_t)
+            ct.fill = PatternFill("solid", fgColor=bg_t)
+            ct.alignment = Alignment(horizontal="center", vertical="center")
+            ct.number_format = "#,##0"
+
+        # PLデータ行
+        mrow("売上合計",                 c["rev_total"],      is_result=True, bold=True)
+        mrow("  タイアップ売上",          c["tie_total"],      is_sub=True)
+        mrow("  ECコミッション（×20%）",  c["ec_commission"],  is_sub=True)
+        mrow(None, None)
+        mrow("▼ 売上原価",               None,                is_sec=True)
+        mrow("  タイアップ原価",          c["tie_cogs"],       is_minus=True)
+        mrow("  広告・集客費",            sc["ad_exp"],        is_minus=True)
+        mrow("売上原価合計",              c["cogs_total"],     bold=True)
+        mrow("粗利",                      c["gross_total"],    is_result=True, bold=True)
+        mrow(None, None)
+        mrow("▼ 販管費 ① 固定販売費",    None,                is_sec=True)
+        mrow("  人件費（バズ社員）",      sc["labor"],         is_minus=True)
+        mrow("  業務委託費・ENTIAL固定",  c["ential_setup"],   is_minus=True)
+        mrow("  ギャル協会固定費（月20万）", c["gal_fixed"],   is_minus=True)
+        mrow("  その他販管費",            sc["other"],         is_minus=True)
+        mrow("  固定販売費 小計",         fixed_sga,           bold=True)
+        mrow("▼ 販管費 ② 案件連動費",    None,                is_sec=True)
+        mrow("  成果報酬（TIE×5%）",     c["ential_success"], is_minus=True)
+        mrow("販管費合計",                c["sga"],            bold=True)
+        mrow(None, None)
+        mrow("営業利益",                  c["op_profit"],      is_result=True, bold=True)
+
+    # 月次テーブルの枠線
+    for row in ws.iter_rows(min_row=MONTHLY_START_ROW, max_row=ROW,
+                            min_col=1, max_col=18):
         for cell in row:
             cell.border = Border(top=thin, bottom=thin, left=thin, right=thin)
 
